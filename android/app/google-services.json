@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "317216724501",
+    "project_id": "smart-roll-call-76a46",
+    "storage_bucket": "smart-roll-call-76a46.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:317216724501:android:38ec0a8c918137be06601c",
+        "android_client_info": {
+          "package_name": "com.example.smart_roll_call_flutter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_MD4YFnfHyuXIUFMBCPl9M6-u1OIYK5g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
