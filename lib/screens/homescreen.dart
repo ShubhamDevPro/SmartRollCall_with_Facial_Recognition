@@ -100,27 +100,38 @@ class _MyHomePageState extends State<MyHomePage> {
       builder: (context) => CourseModal(
         onSave: (title, batchName, batchYear, iconData, dayOfWeek, startTime, endTime) async {
           try {
-            setState(() => _isLoading = true); // Set loading state to true
+            // Don't set loading state here as it affects the main screen
             await _firestoreService.addBatchWithSchedule(
                 batchName, batchYear, iconData, title, dayOfWeek, startTime, endTime);
 
             if (!mounted) return;
-            Navigator.pop(context); // Dismiss the modal
+
+            // First close the modal
+            Navigator.of(context).pop();
+
+            // Then show success message
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Course created successfully')),
+              const SnackBar(
+                content: Text('Course created successfully'),
+                behavior: SnackBarBehavior.floating,
+                duration: Duration(seconds: 2),
+              ),
             );
           } catch (e) {
             if (!mounted) return;
+
+            // Close modal first
+            Navigator.of(context).pop();
+
+            // Then show error message
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Error creating course: $e'),
                 backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+                duration: Duration(seconds: 3),
               ),
             );
-          } finally {
-            if (mounted) {
-              setState(() => _isLoading = false); // Set loading state to false
-            }
           }
         },
       ),

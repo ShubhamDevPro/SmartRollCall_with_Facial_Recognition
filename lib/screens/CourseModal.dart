@@ -265,8 +265,7 @@ class _CourseModalState extends State<CourseModal> {
         endTimeController.text,
       );
       
-      if (!mounted) return;
-      Navigator.pop(context); // Close the modal
+      // Don't close the modal here - let the parent handle it
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
