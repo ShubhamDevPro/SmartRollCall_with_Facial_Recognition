@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:smart_roll_call_flutter/models/batch_schedule.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -15,7 +16,7 @@ class FirestoreService {
         .snapshots();
   }
 
-  // Add new batch
+  // Add new batch (backward compatible - adds default schedule)
   Future<DocumentReference> addBatch(
       String name, String year, IconData icon, String title) async {
     try {
@@ -28,6 +29,10 @@ class FirestoreService {
         'batchYear': year,
         'icon': icon.codePoint,
         'title': title,
+        'dayOfWeek': 'Monday', // Default day
+        'startTime': '09:00',   // Default start time
+        'endTime': '10:00',     // Default end time
+        'isActive': true,
         'createdAt': Timestamp.now(),
       });
     } catch (e) {
@@ -95,20 +100,27 @@ class FirestoreService {
 
   // Add this new method to FirestoreService class
   Future<void> updateBatch(String batchId, String title, String batchName,
-      String batchYear, int iconCodePoint) async {
+      String batchYear, int iconCodePoint, [String? dayOfWeek, String? startTime, String? endTime]) async {
     try {
       print('Updating batch with ID: $batchId');
+      final updateData = {
+        'title': title,
+        'batchName': batchName,
+        'batchYear': batchYear,
+        'icon': iconCodePoint,
+      };
+      
+      // Add scheduling data if provided
+      if (dayOfWeek != null) updateData['dayOfWeek'] = dayOfWeek;
+      if (startTime != null) updateData['startTime'] = startTime;
+      if (endTime != null) updateData['endTime'] = endTime;
+      
       await _firestore
           .collection('users')
           .doc(userId)
           .collection('batches')
           .doc(batchId)
-          .update({
-        'title': title,
-        'batchName': batchName,
-        'batchYear': batchYear,
-        'icon': iconCodePoint,
-      });
+          .update(updateData);
       print('Batch updated successfully');
     } catch (e) {
       print('Error updating batch: $e');
@@ -164,9 +176,6 @@ class FirestoreService {
   // Add method to get attendance for a specific date
   Stream<QuerySnapshot> getAttendanceForDate(
       String batchId, String studentId, DateTime date) {
-    final dateStr =
-        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-
     return _firestore
         .collection('users')
         .doc(userId)
@@ -413,6 +422,210 @@ class FirestoreService {
       return studentData.values.toList();
     } catch (e) {
       print('Error getting attendance history: $e');
+      rethrow;
+    }
+  }
+
+  /// Get currently scheduled batch based on time and day
+  Future<String?> getCurrentlyScheduledBatch() async {
+    try {
+      final now = DateTime.now();
+      final currentDay = _getDayName(now.weekday);
+      final currentTime = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+
+      final batchesSnapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('batches')
+          .where('dayOfWeek', isEqualTo: currentDay)
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      for (var batch in batchesSnapshot.docs) {
+        final data = batch.data();
+        final startTime = data['startTime'] as String? ?? '09:00';
+        final endTime = data['endTime'] as String? ?? '10:00';
+
+        if (currentTime.compareTo(startTime) >= 0 && 
+            currentTime.compareTo(endTime) <= 0) {
+          print('Found currently scheduled batch: ${batch.id} ($startTime-$endTime)');
+          return batch.id;
+        }
+      }
+
+      print('No batch currently scheduled at $currentTime on $currentDay');
+      return null; // No batch currently scheduled
+    } catch (e) {
+      print('Error getting current batch: $e');
+      return null;
+    }
+  }
+
+  /// Get all batches scheduled for today
+  Future<List<BatchSchedule>> getTodaysBatches() async {
+    try {
+      final currentDay = _getDayName(DateTime.now().weekday);
+      
+      final batchesSnapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('batches')
+          .where('dayOfWeek', isEqualTo: currentDay)
+          .where('isActive', isEqualTo: true)
+          .orderBy('startTime')
+          .get();
+
+      return batchesSnapshot.docs
+          .map((doc) => BatchSchedule.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      print('Error getting today\'s batches: $e');
+      return [];
+    }
+  }
+
+  /// Get student by MAC address in currently scheduled batch only
+  Future<Map<String, dynamic>?> getStudentByMacAddressInCurrentBatch(String macAddress) async {
+    try {
+      final currentBatchId = await getCurrentlyScheduledBatch();
+      if (currentBatchId == null) {
+        print('No batch currently scheduled');
+        return null;
+      }
+
+      final studentsSnapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('batches')
+          .doc(currentBatchId)
+          .collection('students')
+          .where('macAddress', isEqualTo: macAddress.toUpperCase())
+          .get();
+
+      if (studentsSnapshot.docs.isNotEmpty) {
+        final studentDoc = studentsSnapshot.docs.first;
+        return {
+          'studentId': studentDoc.id,
+          'batchId': currentBatchId,
+          'name': studentDoc.data()['name'],
+          'enrollNumber': studentDoc.data()['enrollNumber'],
+          'macAddress': studentDoc.data()['macAddress'],
+        };
+      }
+
+      print('No student found with MAC $macAddress in current batch $currentBatchId');
+      return null;
+    } catch (e) {
+      print('Error finding student by MAC in current batch: $e');
+      return null;
+    }
+  }
+
+  /// Mark attendance via ESP32 for currently scheduled batch only
+  Future<bool> markAttendanceByMacAddressCurrentBatch(String macAddress, DateTime date) async {
+    try {
+      // Find student in currently scheduled batch
+      final studentData = await getStudentByMacAddressInCurrentBatch(macAddress);
+      if (studentData == null) {
+        print('No student found with MAC address: $macAddress in current batch');
+        return false;
+      }
+
+      final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      
+      final studentRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('batches')
+          .doc(studentData['batchId'])
+          .collection('students')
+          .doc(studentData['studentId']);
+      
+      final attendanceRef = studentRef.collection('attendance').doc(dateStr);
+      final existingAttendance = await attendanceRef.get();
+      
+      if (existingAttendance.exists) {
+        print('Attendance already marked for ${studentData['name']} on $dateStr in batch ${studentData['batchId']}');
+        return true;
+      }
+
+      // Get current class time for context
+      final classTime = await _getCurrentClassTime(studentData['batchId']);
+
+      // Mark attendance with batch context
+      await attendanceRef.set({
+        'date': Timestamp.fromDate(date),
+        'isPresent': true,
+        'markedBy': 'ESP32',
+        'markedAt': Timestamp.now(),
+        'macAddress': macAddress.toUpperCase(),
+        'batchId': studentData['batchId'],
+        'classTime': classTime,
+        'markedDuringClass': true, // Flag to indicate this was marked during actual class time
+      });
+
+      print('✅ Attendance marked for ${studentData['name']} (${studentData['enrollNumber']}) in batch ${studentData['batchId']} via ESP32');
+      return true;
+    } catch (e) {
+      print('Error marking attendance by MAC address: $e');
+      return false;
+    }
+  }
+
+  /// Get current class time information for a batch
+  Future<String?> _getCurrentClassTime(String batchId) async {
+    try {
+      final batchDoc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('batches')
+          .doc(batchId)
+          .get();
+      
+      if (batchDoc.exists) {
+        final data = batchDoc.data()!;
+        return "${data['startTime']}-${data['endTime']}";
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Convert weekday number to day name
+  String _getDayName(int weekday) {
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    return days[weekday - 1];
+  }
+
+  /// Add batch with scheduling information
+  Future<DocumentReference> addBatchWithSchedule(
+    String name, 
+    String year, 
+    IconData icon, 
+    String title,
+    String dayOfWeek,
+    String startTime,
+    String endTime,
+  ) async {
+    try {
+      return await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('batches')
+          .add({
+        'batchName': name,
+        'batchYear': year,
+        'icon': icon.codePoint,
+        'title': title,
+        'dayOfWeek': dayOfWeek,
+        'startTime': startTime,
+        'endTime': endTime,
+        'isActive': true,
+        'createdAt': Timestamp.now(),
+      });
+    } catch (e) {
+      print('Error adding batch with schedule: $e');
       rethrow;
     }
   }

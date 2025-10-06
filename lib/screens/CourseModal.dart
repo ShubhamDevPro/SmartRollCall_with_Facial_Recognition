@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:smart_roll_call_flutter/widgets/batches.dart';
+import 'package:smart_roll_call_flutter/models/batch_schedule.dart';
 
 // A modal widget that handles both creating and editing course information
 class CourseModal extends StatefulWidget {
   // Callback function that will be called when saving the course
   // Takes course details as parameters and handles the save operation
   final Function(
-          String title, String batchName, String batchYear, IconData iconData)
+          String title, String batchName, String batchYear, IconData iconData,
+          String dayOfWeek, String startTime, String endTime)
       onSave;
 
   // Optional initial values for editing an existing course
@@ -14,6 +16,9 @@ class CourseModal extends StatefulWidget {
   final String? initialBatchName;
   final String? initialBatchYear;
   final IconData? initialIcon;
+  final String? initialDayOfWeek;
+  final String? initialStartTime;
+  final String? initialEndTime;
 
   const CourseModal({
     super.key,
@@ -22,6 +27,9 @@ class CourseModal extends StatefulWidget {
     this.initialBatchName,
     this.initialBatchYear,
     this.initialIcon,
+    this.initialDayOfWeek,
+    this.initialStartTime,
+    this.initialEndTime,
   });
 
   @override
@@ -35,10 +43,19 @@ class _CourseModalState extends State<CourseModal> {
       TextEditingController(text: widget.initialBatchName);
   late final batchYearController =
       TextEditingController(text: widget.initialBatchYear);
+  late final startTimeController = 
+      TextEditingController(text: widget.initialStartTime ?? '09:00');
+  late final endTimeController = 
+      TextEditingController(text: widget.initialEndTime ?? '10:00');
 
   // Tracks whether the course is Theory or Practical based on the icon
   late String selectedCourseType = _getCourseTypeFromIcon(widget.initialIcon);
+  late String selectedDayOfWeek = widget.initialDayOfWeek ?? 'Monday';
   bool _isLoading = false;
+
+  final List<String> _daysOfWeek = [
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +116,84 @@ class _CourseModalState extends State<CourseModal> {
               batchNameController: batchNameController,
               batchYearController: batchYearController,
             ),
+            const SizedBox(height: 16),
+            
+            // Scheduling section
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Class Schedule',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Day of week dropdown
+                    DropdownButtonFormField<String>(
+                      value: selectedDayOfWeek,
+                      decoration: InputDecoration(
+                        labelText: 'Day of Week',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        prefixIcon: const Icon(Icons.calendar_today),
+                      ),
+                      items: _daysOfWeek.map((day) => DropdownMenuItem(
+                        value: day,
+                        child: Text(day),
+                      )).toList(),
+                      onChanged: (value) => setState(() => selectedDayOfWeek = value!),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Time inputs row
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: startTimeController,
+                            decoration: InputDecoration(
+                              labelText: 'Start Time',
+                              hintText: '09:00',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              prefixIcon: const Icon(Icons.access_time),
+                            ),
+                            validator: (value) => _validateTime(value),
+                            onTap: () => _selectTime(context, startTimeController),
+                            readOnly: true,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextFormField(
+                            controller: endTimeController,
+                            decoration: InputDecoration(
+                              labelText: 'End Time',
+                              hintText: '10:00',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              prefixIcon: const Icon(Icons.access_time_filled),
+                            ),
+                            validator: (value) => _validateTime(value),
+                            onTap: () => _selectTime(context, endTimeController),
+                            readOnly: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
             // Save button
             ElevatedButton(
@@ -131,9 +226,27 @@ class _CourseModalState extends State<CourseModal> {
     // Basic validation
     if (titleController.text.isEmpty ||
         batchNameController.text.isEmpty ||
-        batchYearController.text.isEmpty) {
+        batchYearController.text.isEmpty ||
+        startTimeController.text.isEmpty ||
+        endTimeController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in all fields')),
+      );
+      return;
+    }
+
+    // Validate time format and range
+    if (!BatchSchedule.isValidTimeFormat(startTimeController.text) ||
+        !BatchSchedule.isValidTimeFormat(endTimeController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter valid time format (HH:MM)')),
+      );
+      return;
+    }
+
+    if (!BatchSchedule.isValidTimeRange(startTimeController.text, endTimeController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Start time must be before end time')),
       );
       return;
     }
@@ -141,13 +254,19 @@ class _CourseModalState extends State<CourseModal> {
     setState(() => _isLoading = true);
 
     try {
-      // Call the onSave callback with the current values
+      // Call the onSave callback with the current values including schedule
       await widget.onSave(
         titleController.text,
         batchNameController.text,
         batchYearController.text,
         _getIconData(),
+        selectedDayOfWeek,
+        startTimeController.text,
+        endTimeController.text,
       );
+      
+      if (!mounted) return;
+      Navigator.pop(context); // Close the modal
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -157,6 +276,44 @@ class _CourseModalState extends State<CourseModal> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  // Time validation method
+  String? _validateTime(String? value) {
+    if (value == null || value.isEmpty) return 'Time is required';
+    
+    if (!BatchSchedule.isValidTimeFormat(value)) {
+      return 'Enter valid time (HH:MM)';
+    }
+    
+    return null;
+  }
+
+  // Time picker method
+  Future<void> _selectTime(BuildContext context, TextEditingController controller) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _parseTimeString(controller.text),
+    );
+    
+    if (picked != null) {
+      setState(() {
+        controller.text = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+      });
+    }
+  }
+
+  // Helper to parse time string to TimeOfDay
+  TimeOfDay _parseTimeString(String timeStr) {
+    try {
+      final parts = timeStr.split(':');
+      return TimeOfDay(
+        hour: int.parse(parts[0]),
+        minute: int.parse(parts[1]),
+      );
+    } catch (e) {
+      return const TimeOfDay(hour: 9, minute: 0);
     }
   }
 
@@ -193,11 +350,6 @@ class _CourseModalState extends State<CourseModal> {
     return icon == Icons.build ? 'Practical' : 'Theory';
   }
 
-  // Helper method to convert course type string to corresponding icon
-  IconData _getIconFromCourseType(String type) {
-    return type == 'Practical' ? Icons.build : Icons.book;
-  }
-
   Widget _buildCourseTypeOption(String type) {
     final isSelected = selectedCourseType == type;
     return ListTile(
@@ -229,6 +381,8 @@ class _CourseModalState extends State<CourseModal> {
     titleController.dispose();
     batchNameController.dispose();
     batchYearController.dispose();
+    startTimeController.dispose();
+    endTimeController.dispose();
     super.dispose();
   }
 }

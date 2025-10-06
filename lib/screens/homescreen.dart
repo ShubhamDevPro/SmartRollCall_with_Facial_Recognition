@@ -71,6 +71,9 @@ class _MyHomePageState extends State<MyHomePage> {
                 'batchName': data['batchName'] ?? '',
                 'batchYear': data['batchYear'] ?? '',
                 'batchId': doc.id,
+                'dayOfWeek': data['dayOfWeek'] ?? 'Monday',
+                'startTime': data['startTime'] ?? '09:00',
+                'endTime': data['endTime'] ?? '10:00',
               };
             }).toList();
             _isLoading = false; // Set loading state to false
@@ -95,11 +98,11 @@ class _MyHomePageState extends State<MyHomePage> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => CourseModal(
-        onSave: (title, batchName, batchYear, iconData) async {
+        onSave: (title, batchName, batchYear, iconData, dayOfWeek, startTime, endTime) async {
           try {
             setState(() => _isLoading = true); // Set loading state to true
-            await _firestoreService.addBatch(
-                batchName, batchYear, iconData, title);
+            await _firestoreService.addBatchWithSchedule(
+                batchName, batchYear, iconData, title, dayOfWeek, startTime, endTime);
 
             if (!mounted) return;
             Navigator.pop(context); // Dismiss the modal
@@ -625,10 +628,14 @@ class _MyHomePageState extends State<MyHomePage> {
         initialBatchName: course['batchName'],
         initialBatchYear: course['batchYear'],
         initialIcon: course['icon'],
-        onSave: (title, batchName, batchYear, iconData) async {
+        initialDayOfWeek: course['dayOfWeek'],
+        initialStartTime: course['startTime'],
+        initialEndTime: course['endTime'],
+        onSave: (title, batchName, batchYear, iconData, dayOfWeek, startTime, endTime) async {
           print('Attempting to update course with ID: ${course['batchId']}');
           print(
               'Title: $title, BatchName: $batchName, BatchYear: $batchYear, Icon: ${iconData.codePoint}');
+          print('Schedule: $dayOfWeek $startTime-$endTime');
           try {
             await _firestoreService.updateBatch(
               course['batchId'],
@@ -636,6 +643,9 @@ class _MyHomePageState extends State<MyHomePage> {
               batchName,
               batchYear,
               iconData.codePoint,
+              dayOfWeek,
+              startTime,
+              endTime,
             );
             setState(() {
               courses[index] = {
@@ -644,6 +654,9 @@ class _MyHomePageState extends State<MyHomePage> {
                 'batchName': batchName,
                 'batchYear': batchYear,
                 'batchId': course['batchId'],
+                'dayOfWeek': dayOfWeek,
+                'startTime': startTime,
+                'endTime': endTime,
               };
             });
             if (!mounted) return;

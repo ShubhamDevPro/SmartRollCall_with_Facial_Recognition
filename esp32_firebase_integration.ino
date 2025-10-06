@@ -5,7 +5,7 @@
 #include <ArduinoJson.h>
 #include <Arduino.h>
 #include <WiFiClientSecure.h>
-#include <base64.h>
+#include <time.h>
 
 #define LED_BUILTIN 2  // Define LED_BUILTIN for ESP32
 
@@ -24,6 +24,11 @@ const int max_connection = 20;
 // For connection to Home WiFi (for internet)
 const char* wifi_network_ssid = "GGSIPU_EDC_STUDENT";
 const char* wifi_network_password = NULL;
+
+// Time configuration
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = 19800; // GMT+5:30 for India
+const int daylightOffset_sec = 0;
 
 struct ConnectedDevice {
   uint8_t mac[6];
@@ -54,6 +59,10 @@ void setup() {
   Serial.println();
   Serial.print("[+] Connected to internet with IP: ");
   Serial.println(WiFi.localIP());
+
+  // Initialize time
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  Serial.println("[+] Time synchronized");
 }
 
 bool isDeviceConnected(const uint8_t* mac) {
@@ -81,23 +90,48 @@ String getMacAddressString(const uint8_t* mac) {
   return String(macStr);
 }
 
-bool findStudentByMacAddress(const String& macAddress, String& batchId, String& studentId, String& studentName, String& enrollNumber) {
+String getCurrentDayName() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    return "Unknown";
+  }
+  
+  const char* days[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+  return String(days[timeinfo.tm_wday]);
+}
+
+String getCurrentTime() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    return "00:00";
+  }
+  
+  char timeStr[6];
+  sprintf(timeStr, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+  return String(timeStr);
+}
+
+String getCurrentlyScheduledBatch() {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("No internet connection for Firebase query");
-    return false;
+    Serial.println("No internet connection for batch query");
+    return "";
   }
 
+  String currentDay = getCurrentDayName();
+  String currentTime = getCurrentTime();
+  
+  Serial.println("🕐 Current time: " + currentDay + " " + currentTime);
+  
   WiFiClientSecure client;
-  client.setInsecure(); // Skip certificate verification for simplicity
+  client.setInsecure();
   HTTPClient http;
   
-  // Query Firebase to find student by MAC address
+  // Query Firebase for currently scheduled batch
   String url = "https://firestore.googleapis.com/v1/projects/" + String(FIREBASE_PROJECT_ID) + 
-               "/databases/(default)/documents/users/" + String(FIREBASE_USER_ID) + "/batches?key=" + String(FIREBASE_API_KEY);
+               "/databases/(default)/documents/users/" + String(FIREBASE_USER_ID) + 
+               "/batches?key=" + String(FIREBASE_API_KEY);
   
   http.begin(client, url);
-  http.addHeader("Content-Type", "application/json");
-  
   int httpResponseCode = http.GET();
   
   if (httpResponseCode == 200) {
@@ -105,58 +139,95 @@ bool findStudentByMacAddress(const String& macAddress, String& batchId, String& 
     DynamicJsonDocument doc(8192);
     deserializeJson(doc, response);
     
-    // Check if documents exist
     if (doc.containsKey("documents")) {
       JsonArray batches = doc["documents"];
       
-      // Iterate through each batch
       for (JsonObject batch : batches) {
-        String currentBatchPath = batch["name"];
-        String currentBatchId = currentBatchPath.substring(currentBatchPath.lastIndexOf("/") + 1);
+        JsonObject fields = batch["fields"];
         
-        // Query students in this batch
-        String studentsUrl = "https://firestore.googleapis.com/v1/projects/" + String(FIREBASE_PROJECT_ID) + 
-                           "/databases/(default)/documents/users/" + String(FIREBASE_USER_ID) + 
-                           "/batches/" + currentBatchId + "/students?key=" + String(FIREBASE_API_KEY);
-        
-        HTTPClient studentHttp;
-        studentHttp.begin(client, studentsUrl);
-        int studentResponse = studentHttp.GET();
-        
-        if (studentResponse == 200) {
-          String studentResponseStr = studentHttp.getString();
-          DynamicJsonDocument studentDoc(4096);
-          deserializeJson(studentDoc, studentResponseStr);
+        if (fields.containsKey("dayOfWeek") && fields.containsKey("startTime") && 
+            fields.containsKey("endTime") && fields.containsKey("isActive")) {
           
-          if (studentDoc.containsKey("documents")) {
-            JsonArray students = studentDoc["documents"];
+          String batchDay = fields["dayOfWeek"]["stringValue"];
+          String startTime = fields["startTime"]["stringValue"];
+          String endTime = fields["endTime"]["stringValue"];
+          bool isActive = fields["isActive"]["booleanValue"];
+          String batchName = fields["batchName"]["stringValue"];
+          
+          Serial.println("📚 Found batch: " + batchName + " on " + batchDay + " (" + startTime + "-" + endTime + ")");
+          
+          if (isActive && batchDay == currentDay && 
+              currentTime >= startTime && currentTime <= endTime) {
             
-            for (JsonObject student : students) {
-              JsonObject fields = student["fields"];
-              if (fields.containsKey("macAddress")) {
-                String studentMac = fields["macAddress"]["stringValue"];
-                if (studentMac.equalsIgnoreCase(macAddress)) {
-                  // Found the student!
-                  batchId = currentBatchId;
-                  String studentPath = student["name"];
-                  studentId = studentPath.substring(studentPath.lastIndexOf("/") + 1);
-                  studentName = fields["name"]["stringValue"];
-                  enrollNumber = fields["enrollNumber"]["stringValue"];
-                  studentHttp.end();
-                  http.end();
-                  return true;
-                }
-              }
-            }
+            String batchPath = batch["name"];
+            String batchId = batchPath.substring(batchPath.lastIndexOf("/") + 1);
+            
+            Serial.println("📅 ✅ Current batch: " + batchName + " (ID: " + batchId + ") - " + startTime + "-" + endTime);
+            http.end();
+            return batchId;
           }
         }
-        studentHttp.end();
       }
     }
   } else {
-    Serial.print("HTTP Error: ");
+    Serial.print("❌ HTTP Error querying batches: ");
     Serial.println(httpResponseCode);
-    Serial.println(http.getString());
+    if (httpResponseCode > 0) {
+      Serial.println(http.getString());
+    }
+  }
+  
+  http.end();
+  Serial.println("⏰ No batch currently scheduled at " + currentTime + " on " + currentDay);
+  return "";
+}
+
+bool findStudentInCurrentBatch(const String& macAddress, String& batchId, String& studentId, String& studentName, String& enrollNumber) {
+  // First get the currently scheduled batch
+  String currentBatch = getCurrentlyScheduledBatch();
+  if (currentBatch.isEmpty()) {
+    return false;
+  }
+  
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  
+  // Query students in the current batch only
+  String url = "https://firestore.googleapis.com/v1/projects/" + String(FIREBASE_PROJECT_ID) + 
+               "/databases/(default)/documents/users/" + String(FIREBASE_USER_ID) + 
+               "/batches/" + currentBatch + "/students?key=" + String(FIREBASE_API_KEY);
+  
+  http.begin(client, url);
+  int httpResponseCode = http.GET();
+  
+  if (httpResponseCode == 200) {
+    String response = http.getString();
+    DynamicJsonDocument doc(4096);
+    deserializeJson(doc, response);
+    
+    if (doc.containsKey("documents")) {
+      JsonArray students = doc["documents"];
+      
+      for (JsonObject student : students) {
+        JsonObject fields = student["fields"];
+        if (fields.containsKey("macAddress")) {
+          String studentMac = fields["macAddress"]["stringValue"];
+          if (studentMac.equalsIgnoreCase(macAddress)) {
+            batchId = currentBatch;
+            String studentPath = student["name"];
+            studentId = studentPath.substring(studentPath.lastIndexOf("/") + 1);
+            studentName = fields["name"]["stringValue"];
+            enrollNumber = fields["enrollNumber"]["stringValue"];
+            http.end();
+            return true;
+          }
+        }
+      }
+    }
+  } else {
+    Serial.print("❌ HTTP Error querying students: ");
+    Serial.println(httpResponseCode);
   }
   
   http.end();
@@ -164,16 +235,11 @@ bool findStudentByMacAddress(const String& macAddress, String& batchId, String& 
 }
 
 bool markAttendanceInFirebase(const String& batchId, const String& studentId, const String& macAddress, const String& studentName, const String& enrollNumber) {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("No internet connection for Firebase update");
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("Failed to obtain time");
     return false;
   }
-
-  // Get current date
-  time_t now;
-  time(&now);
-  struct tm timeinfo;
-  localtime_r(&now, &timeinfo);
   
   char dateStr[11];
   sprintf(dateStr, "%04d-%02d-%02d", timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday);
@@ -192,14 +258,14 @@ bool markAttendanceInFirebase(const String& batchId, const String& studentId, co
   int checkResponse = http.GET();
   
   if (checkResponse == 200) {
-    Serial.println("Attendance already marked for " + studentName + " on " + String(dateStr));
+    Serial.println("✓ Attendance already marked for " + studentName + " in batch " + batchId + " on " + String(dateStr));
     http.end();
     return true; // Already marked, consider successful
   }
   
   http.end();
   
-  // Mark new attendance
+  // Mark new attendance with enhanced metadata
   String attendanceUrl = "https://firestore.googleapis.com/v1/projects/" + String(FIREBASE_PROJECT_ID) + 
                         "/databases/(default)/documents/users/" + String(FIREBASE_USER_ID) + 
                         "/batches/" + batchId + "/students/" + studentId + "/attendance/" + String(dateStr) + 
@@ -209,14 +275,18 @@ bool markAttendanceInFirebase(const String& batchId, const String& studentId, co
   attendanceDoc["fields"]["isPresent"]["booleanValue"] = true;
   attendanceDoc["fields"]["markedBy"]["stringValue"] = "ESP32";
   attendanceDoc["fields"]["macAddress"]["stringValue"] = macAddress;
+  attendanceDoc["fields"]["batchId"]["stringValue"] = batchId;
+  attendanceDoc["fields"]["classTime"]["stringValue"] = getCurrentTime();
+  attendanceDoc["fields"]["dayOfWeek"]["stringValue"] = getCurrentDayName();
+  attendanceDoc["fields"]["markedDuringClass"]["booleanValue"] = true;
   
   // Add timestamp
-  attendanceDoc["fields"]["date"]["timestampValue"] = String(timeinfo.tm_year + 1900) + "-" + 
-                                                     (timeinfo.tm_mon + 1 < 10 ? "0" : "") + String(timeinfo.tm_mon + 1) + "-" +
-                                                     (timeinfo.tm_mday < 10 ? "0" : "") + String(timeinfo.tm_mday) + "T" +
-                                                     (timeinfo.tm_hour < 10 ? "0" : "") + String(timeinfo.tm_hour) + ":" +
-                                                     (timeinfo.tm_min < 10 ? "0" : "") + String(timeinfo.tm_min) + ":" +
-                                                     (timeinfo.tm_sec < 10 ? "0" : "") + String(timeinfo.tm_sec) + "Z";
+  char timestampStr[30];
+  sprintf(timestampStr, "%04d-%02d-%02dT%02d:%02d:%02dZ", 
+          timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+          timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+  attendanceDoc["fields"]["date"]["timestampValue"] = String(timestampStr);
+  attendanceDoc["fields"]["markedAt"]["timestampValue"] = String(timestampStr);
   
   String attendanceJson;
   serializeJson(attendanceDoc, attendanceJson);
@@ -227,11 +297,11 @@ bool markAttendanceInFirebase(const String& batchId, const String& studentId, co
   int httpResponseCode = http.PATCH(attendanceJson);
   
   if (httpResponseCode == 200 || httpResponseCode == 201) {
-    Serial.println("✓ Attendance marked for " + studentName + " (" + enrollNumber + ") via ESP32");
+    Serial.println("✅ Attendance marked for " + studentName + " (" + enrollNumber + ") in batch " + batchId + " at " + getCurrentTime());
     http.end();
     return true;
   } else {
-    Serial.print("Error marking attendance: ");
+    Serial.print("❌ Error marking attendance: ");
     Serial.println(httpResponseCode);
     Serial.println(http.getString());
     http.end();
@@ -260,13 +330,13 @@ void display_connected_devices() {
       Serial.print("[+] Device " + String(i) + " | MAC: " + macAddress);
       Serial.println(" | IP: " + String(ip4addr_ntoa(reinterpret_cast<const ip4_addr_t*>(&station.ip))));
 
-      // Try to find student and mark attendance
+      // Try to find student in currently scheduled batch only
       String batchId, studentId, studentName, enrollNumber;
-      if (findStudentByMacAddress(macAddress, batchId, studentId, studentName, enrollNumber)) {
-        Serial.println("📱 Student found: " + studentName + " (" + enrollNumber + ")");
+      if (findStudentInCurrentBatch(macAddress, batchId, studentId, studentName, enrollNumber)) {
+        Serial.println("� Student found: " + studentName + " (" + enrollNumber + ") in current batch " + batchId);
         
         if (markAttendanceInFirebase(batchId, studentId, macAddress, studentName, enrollNumber)) {
-          Serial.println("✅ Attendance marked successfully!");
+          Serial.println("✅ Attendance marked successfully during scheduled class time!");
           
           // Flash LED to indicate success
           for (int j = 0; j < 5; j++) {
@@ -279,7 +349,8 @@ void display_connected_devices() {
           Serial.println("❌ Failed to mark attendance");
         }
       } else {
-        Serial.println("❓ No student found with MAC address: " + macAddress);
+        Serial.println("❌ Student not found in current batch or no batch scheduled at this time");
+        Serial.println("   MAC: " + macAddress + " - Registration may be needed");
       }
     }
   }
