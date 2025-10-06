@@ -1,39 +1,40 @@
 // Firebase Firestore Security Rules for Smart Roll Call
-// This file contains recommended security rules for the Firebase project
+// This file contains demo security rules for the Firebase project
+// WARNING: These rules are for demo purposes only - allow open access
 
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users can only access their own data
+    // Demo version - allow access to all user data
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId || userId == 'public_user';
-      
+      allow read, write: if true;
+
       // Batches collection
       match /batches/{batchId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId || userId == 'public_user';
-        
+        allow read, write: if true;
+
+        // NEW: Schedules subcollection for multi-schedule courses
+        match /schedules/{scheduleId} {
+          allow read, write: if true;
+        }
+
         // Students in batches
         match /students/{studentId} {
-          allow read, write: if request.auth != null && request.auth.uid == userId || userId == 'public_user';
-          
+          allow read, write: if true;
+
           // Attendance records
           match /attendance/{attendanceId} {
-            allow read, write: if request.auth != null && request.auth.uid == userId || userId == 'public_user';
+            allow read, write: if true;
           }
         }
       }
     }
     
-    // ESP32 Integration Rules
+    // ESP32 Integration Rules (Demo Mode)
     // Allow ESP32 to read student MAC addresses and write attendance
-    match /users/public_user/batches/{batchId}/students/{studentId} {
-      // ESP32 can read student data to find MAC addresses
-      allow read: if true; // In production, you might want to add API key validation
-      
-      match /attendance/{date} {
-        // ESP32 can write attendance records
-        allow create, update: if true; // In production, add proper validation
-      }
+    match /{document=**} {
+      // Demo mode: Allow all reads and writes for ESP32 integration
+      allow read, write: if true;
     }
   }
 }

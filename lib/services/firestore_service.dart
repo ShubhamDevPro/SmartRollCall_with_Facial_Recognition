@@ -1,12 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:smart_roll_call_flutter/models/batch_schedule.dart';
+import 'package:smart_roll_call_flutter/models/course_schedule.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String userId = 'public_user';
 
-  // Get batches for current user
+  // Get batches for current user with their schedules
   Stream<QuerySnapshot> getBatches() {
     return _firestore
         .collection('users')
@@ -16,11 +17,30 @@ class FirestoreService {
         .snapshots();
   }
 
-  // Add new batch (backward compatible - adds default schedule)
-  Future<DocumentReference> addBatch(
-      String name, String year, IconData icon, String title) async {
+  // Get schedules for a specific course/batch
+  Stream<QuerySnapshot> getCourseSchedules(String batchId) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('batches')
+        .doc(batchId)
+        .collection('schedules')
+        .orderBy('dayOfWeek')
+        .orderBy('startTime')
+        .snapshots();
+  }
+
+  // Add new batch with multiple schedules
+  Future<DocumentReference> addBatchWithSchedules(
+    String name,
+    String year,
+    IconData icon,
+    String title,
+    List<Map<String, String>> schedules, // List of {dayOfWeek, startTime, endTime}
+  ) async {
     try {
-      return await _firestore
+      // First create the batch document
+      final batchRef = await _firestore
           .collection('users')
           .doc(userId)
           .collection('batches')
@@ -29,103 +49,141 @@ class FirestoreService {
         'batchYear': year,
         'icon': icon.codePoint,
         'title': title,
-        'dayOfWeek': 'Monday', // Default day
-        'startTime': '09:00',   // Default start time
-        'endTime': '10:00',     // Default end time
         'isActive': true,
         'createdAt': Timestamp.now(),
       });
+
+      // Then add schedules to the schedules subcollection
+      final batch = _firestore.batch();
+      for (var schedule in schedules) {
+        final scheduleRef = batchRef.collection('schedules').doc();
+        batch.set(scheduleRef, {
+          'dayOfWeek': schedule['dayOfWeek'],
+          'startTime': schedule['startTime'],
+          'endTime': schedule['endTime'],
+          'isActive': true,
+          'createdAt': Timestamp.now(),
+        });
+      }
+      await batch.commit();
+
+      return batchRef;
     } catch (e) {
-      print('Error adding batch: $e');
+      print('Error adding batch with schedules: $e');
       rethrow;
     }
   }
 
-  // Get students in a batch
-  Stream<QuerySnapshot> getStudents(String batchId) {
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('batches')
-        .doc(batchId)
-        .collection('students')
-        .snapshots();
-  }
-
-  // Add student to batch
-  Future<void> addStudent(
-      String batchId, Map<String, dynamic> studentData) async {
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('batches')
-        .doc(batchId)
-        .collection('students')
-        .add(studentData);
-  }
-
-  // Update student attendance
-  Future<void> updateStudentAttendance(
-      String batchId, String studentId, bool isPresent) {
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('batches')
-        .doc(batchId)
-        .collection('students')
-        .doc(studentId)
-        .update({'isPresent': isPresent});
-  }
-
-  // Delete batch and all its students
-  Future<void> deleteBatch(String batchId) async {
-    // Get reference to the batch
-    final batchRef = _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('batches')
-        .doc(batchId);
-
-    // Get all students in the batch
-    final studentsSnapshot = await batchRef.collection('students').get();
-
-    // Delete all students
-    for (var doc in studentsSnapshot.docs) {
-      await doc.reference.delete();
-    }
-
-    // Delete the batch itself
-    await batchRef.delete();
-  }
-
-  // Add this new method to FirestoreService class
-  Future<void> updateBatch(String batchId, String title, String batchName,
-      String batchYear, int iconCodePoint, [String? dayOfWeek, String? startTime, String? endTime]) async {
+  // Add a single schedule to an existing course
+  Future<void> addScheduleToCourse(
+    String batchId,
+    String dayOfWeek,
+    String startTime,
+    String endTime,
+  ) async {
     try {
-      print('Updating batch with ID: $batchId');
-      final updateData = {
-        'title': title,
-        'batchName': batchName,
-        'batchYear': batchYear,
-        'icon': iconCodePoint,
-      };
-      
-      // Add scheduling data if provided
-      if (dayOfWeek != null) updateData['dayOfWeek'] = dayOfWeek;
-      if (startTime != null) updateData['startTime'] = startTime;
-      if (endTime != null) updateData['endTime'] = endTime;
-      
       await _firestore
           .collection('users')
           .doc(userId)
           .collection('batches')
           .doc(batchId)
-          .update(updateData);
-      print('Batch updated successfully');
+          .collection('schedules')
+          .add({
+        'dayOfWeek': dayOfWeek,
+        'startTime': startTime,
+        'endTime': endTime,
+        'isActive': true,
+        'createdAt': Timestamp.now(),
+      });
     } catch (e) {
-      print('Error updating batch: $e');
+      print('Error adding schedule: $e');
       rethrow;
     }
+  }
+
+  // Update a specific schedule
+  Future<void> updateSchedule(
+    String batchId,
+    String scheduleId,
+    String dayOfWeek,
+    String startTime,
+    String endTime,
+  ) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('batches')
+          .doc(batchId)
+          .collection('schedules')
+          .doc(scheduleId)
+          .update({
+        'dayOfWeek': dayOfWeek,
+        'startTime': startTime,
+        'endTime': endTime,
+      });
+    } catch (e) {
+      print('Error updating schedule: $e');
+      rethrow;
+    }
+  }
+
+  // Delete a specific schedule
+  Future<void> deleteSchedule(String batchId, String scheduleId) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('batches')
+          .doc(batchId)
+          .collection('schedules')
+          .doc(scheduleId)
+          .delete();
+    } catch (e) {
+      print('Error deleting schedule: $e');
+      rethrow;
+    }
+  }
+
+  // Get all schedules for a course as a list
+  Future<List<CourseSchedule>> getCourseSchedulesList(String batchId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('batches')
+          .doc(batchId)
+          .collection('schedules')
+          .orderBy('dayOfWeek')
+          .orderBy('startTime')
+          .get();
+
+      return snapshot.docs.map((doc) {
+        return CourseSchedule.fromFirestore(doc.data(), doc.id);
+      }).toList();
+    } catch (e) {
+      print('Error getting course schedules: $e');
+      rethrow;
+    }
+  }
+
+  // Backward compatibility: Add batch with single schedule (for existing UI)
+  Future<DocumentReference> addBatchWithSchedule(
+    String name,
+    String year,
+    IconData icon,
+    String title,
+    String dayOfWeek,
+    String startTime,
+    String endTime,
+  ) async {
+    return addBatchWithSchedules(name, year, icon, title, [
+      {
+        'dayOfWeek': dayOfWeek,
+        'startTime': startTime,
+        'endTime': endTime,
+      }
+    ]);
   }
 
   // Add new method to save attendance for a specific date
@@ -598,34 +656,105 @@ class FirestoreService {
     return days[weekday - 1];
   }
 
-  /// Add batch with scheduling information
-  Future<DocumentReference> addBatchWithSchedule(
-    String name, 
-    String year, 
-    IconData icon, 
+  /// Delete batch and all its data
+  Future<void> deleteBatch(String batchId) async {
+    try {
+      final batchRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('batches')
+          .doc(batchId);
+
+      // Delete all subcollections (students, schedules, etc.)
+      final studentsSnapshot = await batchRef.collection('students').get();
+      for (var studentDoc in studentsSnapshot.docs) {
+        // Delete student's attendance records
+        final attendanceSnapshot = await studentDoc.reference.collection('attendance').get();
+        for (var attendanceDoc in attendanceSnapshot.docs) {
+          await attendanceDoc.reference.delete();
+        }
+        await studentDoc.reference.delete();
+      }
+
+      final schedulesSnapshot = await batchRef.collection('schedules').get();
+      for (var scheduleDoc in schedulesSnapshot.docs) {
+        await scheduleDoc.reference.delete();
+      }
+
+      // Finally delete the batch itself
+      await batchRef.delete();
+      print('Batch deleted successfully: $batchId');
+    } catch (e) {
+      print('Error deleting batch: $e');
+      rethrow;
+    }
+  }
+
+  /// Update batch information
+  Future<void> updateBatch(
+    String batchId,
     String title,
+    String batchName,
+    String batchYear,
+    int iconCodePoint,
     String dayOfWeek,
     String startTime,
     String endTime,
   ) async {
     try {
-      return await _firestore
+      await _firestore
           .collection('users')
           .doc(userId)
           .collection('batches')
-          .add({
-        'batchName': name,
-        'batchYear': year,
-        'icon': icon.codePoint,
+          .doc(batchId)
+          .update({
         'title': title,
+        'batchName': batchName,
+        'batchYear': batchYear,
+        'icon': iconCodePoint,
         'dayOfWeek': dayOfWeek,
         'startTime': startTime,
         'endTime': endTime,
-        'isActive': true,
+      });
+      print('Batch updated successfully: $batchId');
+    } catch (e) {
+      print('Error updating batch: $e');
+      rethrow;
+    }
+  }
+
+  /// Get students in a batch
+  Stream<QuerySnapshot> getStudents(String batchId) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('batches')
+        .doc(batchId)
+        .collection('students')
+        .orderBy('enrollNumber')
+        .snapshots();
+  }
+
+  /// Add a student to a batch
+  Future<DocumentReference> addStudent(
+    String batchId,
+    Map<String, dynamic> studentData,
+  ) async {
+    try {
+      final studentRef = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('batches')
+          .doc(batchId)
+          .collection('students')
+          .add({
+        ...studentData,
         'createdAt': Timestamp.now(),
       });
+      print('Student added successfully: ${studentData['enrollNumber']}');
+      return studentRef;
     } catch (e) {
-      print('Error adding batch with schedule: $e');
+      print('Error adding student: $e');
       rethrow;
     }
   }

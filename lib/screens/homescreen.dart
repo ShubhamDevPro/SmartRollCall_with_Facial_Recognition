@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:smart_roll_call_flutter/screens/AttendanceScreen.dart';
 import 'package:smart_roll_call_flutter/screens/View-Edit%20History/AttendanceHistory.dart';
 import 'package:smart_roll_call_flutter/screens/CourseModal.dart';
+import 'package:smart_roll_call_flutter/screens/MultiScheduleCourseModal.dart';
+import 'package:smart_roll_call_flutter/screens/CourseDetailsScreen.dart';
 import 'package:smart_roll_call_flutter/services/firestore_service.dart';
 import 'package:smart_roll_call_flutter/screens/settings_screen.dart';
 import 'package:smart_roll_call_flutter/screens/attendance_overview_screen.dart';
+import 'package:smart_roll_call_flutter/models/course_schedule.dart';
 
 // Main widget for the home page
 class MyHomePage extends StatefulWidget {
@@ -16,7 +19,7 @@ class MyHomePage extends StatefulWidget {
 
 // State class for MyHomePage
 class _MyHomePageState extends State<MyHomePage> {
-  // List to store course data
+  // List to store course data with schedules
   List<Map<String, dynamic>> courses = [];
   // Instance of FirestoreService to interact with Firestore
   final FirestoreService _firestoreService = FirestoreService();
@@ -53,30 +56,68 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  // Method to load courses from Firestore
+  // Method to load courses from Firestore with their schedules
   void _loadCourses() {
-    setState(() => _isLoading = true); // Set loading state to true
+    setState(() => _isLoading = true);
     _firestoreService.getBatches().listen(
-      (snapshot) {
+      (snapshot) async {
         if (mounted) {
-          // Check if the widget is still mounted
+          List<Map<String, dynamic>> loadedCourses = [];
+
+          for (var doc in snapshot.docs) {
+            final data = doc.data() as Map<String, dynamic>;
+
+            // Load schedules for this course
+            List<CourseSchedule> schedules = [];
+            String dayOfWeek = 'Monday';
+            String startTime = '09:00';
+            String endTime = '10:00';
+
+            try {
+              schedules = await _firestoreService.getCourseSchedulesList(doc.id);
+              // If schedules exist, use the first one for backward compatibility
+              if (schedules.isNotEmpty) {
+                dayOfWeek = schedules.first.dayOfWeek;
+                startTime = schedules.first.startTime;
+                endTime = schedules.first.endTime;
+              }
+            } catch (e) {
+              print('Error loading schedules for ${doc.id}: $e');
+              // If no schedules found in new structure, check for legacy single schedule
+              if (data.containsKey('dayOfWeek')) {
+                dayOfWeek = data['dayOfWeek'] ?? 'Monday';
+                startTime = data['startTime'] ?? '09:00';
+                endTime = data['endTime'] ?? '10:00';
+                schedules = [
+                  CourseSchedule(
+                    id: 'legacy',
+                    dayOfWeek: dayOfWeek,
+                    startTime: startTime,
+                    endTime: endTime,
+                    createdAt: DateTime.now(),
+                  )
+                ];
+              }
+            }
+
+            loadedCourses.add({
+              'icon': IconData(data['icon'] ?? Icons.book.codePoint,
+                  fontFamily: 'MaterialIcons'),
+              'title': data['title'] ?? 'Untitled',
+              'batchName': data['batchName'] ?? '',
+              'batchYear': data['batchYear'] ?? '',
+              'batchId': doc.id,
+              'schedules': schedules,
+              'dayOfWeek': dayOfWeek,
+              'startTime': startTime,
+              'endTime': endTime,
+              'createdAt': data['createdAt'],
+            });
+          }
+
           setState(() {
-            // Map Firestore documents to a list of course data
-            courses = snapshot.docs.map((doc) {
-              final data = doc.data() as Map<String, dynamic>;
-              return {
-                'icon': IconData(data['icon'] ?? Icons.book.codePoint,
-                    fontFamily: 'MaterialIcons'),
-                'title': data['title'] ?? 'Untitled',
-                'batchName': data['batchName'] ?? '',
-                'batchYear': data['batchYear'] ?? '',
-                'batchId': doc.id,
-                'dayOfWeek': data['dayOfWeek'] ?? 'Monday',
-                'startTime': data['startTime'] ?? '09:00',
-                'endTime': data['endTime'] ?? '10:00',
-              };
-            }).toList();
-            _isLoading = false; // Set loading state to false
+            courses = loadedCourses;
+            _isLoading = false;
           });
         }
       },
@@ -84,37 +125,41 @@ class _MyHomePageState extends State<MyHomePage> {
         print('Error loading courses: $error');
         if (mounted) {
           setState(() {
-            _isLoading = false; // Set loading state to false on error
+            _isLoading = false;
           });
         }
       },
     );
   }
 
-  // Method to add a new course
+  // Method to add a new course with multiple schedules
   Future<void> _addCourse() async {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => CourseModal(
-        onSave: (title, batchName, batchYear, iconData, dayOfWeek, startTime, endTime) async {
+      builder: (context) => MultiScheduleCourseModal(
+        onSave: (title, batchName, batchYear, iconData, schedules) async {
           try {
-            // Don't set loading state here as it affects the main screen
-            await _firestoreService.addBatchWithSchedule(
-                batchName, batchYear, iconData, title, dayOfWeek, startTime, endTime);
+            await _firestoreService.addBatchWithSchedules(
+              batchName,
+              batchYear,
+              iconData,
+              title,
+              schedules
+            );
 
             if (!mounted) return;
 
-            // First close the modal
+            // Close the modal
             Navigator.of(context).pop();
 
-            // Then show success message
+            // Show success message
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Course created successfully'),
+              SnackBar(
+                content: Text('Course "$title" created with ${schedules.length} schedule(s)'),
                 behavior: SnackBarBehavior.floating,
-                duration: Duration(seconds: 2),
+                duration: Duration(seconds: 3),
               ),
             );
           } catch (e) {
@@ -123,7 +168,7 @@ class _MyHomePageState extends State<MyHomePage> {
             // Close modal first
             Navigator.of(context).pop();
 
-            // Then show error message
+            // Show error message
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Error creating course: $e'),
@@ -614,6 +659,45 @@ class _MyHomePageState extends State<MyHomePage> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                           side: const BorderSide(color: Colors.blue, width: 2),
+                        ),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CourseDetailsScreen(
+                              batchId: courses[index]['batchId'],
+                              courseTitle: courses[index]['title'],
+                              batchName: courses[index]['batchName'],
+                              batchYear: courses[index]['batchYear'],
+                              icon: courses[index]['icon'],
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.info_outline, color: Colors.green),
+                      label: const Text(
+                        'View Details',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.green,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: const BorderSide(color: Colors.green, width: 2),
                         ),
                         elevation: 0,
                       ),
