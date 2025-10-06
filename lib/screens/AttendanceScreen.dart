@@ -78,6 +78,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     FocusManager.instance.primaryFocus?.unfocus();
     await Future.delayed(const Duration(milliseconds: 100));
 
+    // Store the ScaffoldMessenger reference early to avoid widget tree lookup issues
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
     try {
       // Prepare attendance data for storage
       final attendanceData = students
@@ -95,10 +99,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         attendanceData,
       );
 
+      // Check if widget is still mounted before showing SnackBar
       if (!mounted) return;
 
       // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
+      scaffoldMessenger.showSnackBar(
         const SnackBar(
           content: Text('Attendance saved successfully!'),
           behavior: SnackBarBehavior.floating,
@@ -107,8 +112,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       );
 
       // Navigate to attendance history screen
-      Navigator.pushReplacement(
-        context,
+      navigator.pushReplacement(
         MaterialPageRoute(
           builder: (context) => AttendanceHistoryScreen(
             batchId: widget.batchId,
@@ -116,9 +120,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ),
       );
     } catch (e) {
+      // Check if widget is still mounted before showing error SnackBar
       if (!mounted) return;
+
       // Show error message if save fails
-      ScaffoldMessenger.of(context).showSnackBar(
+      scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text('Error saving attendance: $e'),
           behavior: SnackBarBehavior.floating,

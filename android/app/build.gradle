@@ -29,7 +29,7 @@ android {
     defaultConfig {
         // Update this from example to your actual package name
         applicationId = "com.example.smart_roll_call_flutter"
-        minSdk = 23
+        minSdkVersion flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
