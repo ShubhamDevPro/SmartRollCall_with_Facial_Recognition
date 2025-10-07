@@ -1,13 +1,18 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+/// Represents a scheduled class session with specific time slots
 class CourseSchedule {
   final String id;
-  final String dayOfWeek;
-  final String startTime;
-  final String endTime;
+  final String batchId;
+  final String dayOfWeek; // e.g., "Monday", "Tuesday"
+  final String startTime; // e.g., "13:00"
+  final String endTime; // e.g., "14:00"
   final bool isActive;
   final DateTime createdAt;
 
   CourseSchedule({
     required this.id,
+    required this.batchId,
     required this.dayOfWeek,
     required this.startTime,
     required this.endTime,
@@ -15,33 +20,42 @@ class CourseSchedule {
     required this.createdAt,
   });
 
-  factory CourseSchedule.fromFirestore(Map<String, dynamic> data, String id) {
+  /// Factory constructor to create CourseSchedule from Firestore document
+  factory CourseSchedule.fromFirestore(DocumentSnapshot doc) {
+    Map data = doc.data() as Map;
     return CourseSchedule(
-      id: id,
-      dayOfWeek: data['dayOfWeek'] ?? 'Monday',
-      startTime: data['startTime'] ?? '09:00',
-      endTime: data['endTime'] ?? '10:00',
+      id: doc.id,
+      batchId: doc.reference.parent.parent!.id,
+      dayOfWeek: data['dayOfWeek'] ?? '',
+      startTime: data['startTime'] ?? '',
+      endTime: data['endTime'] ?? '',
       isActive: data['isActive'] ?? true,
-      createdAt: data['createdAt']?.toDate() ?? DateTime.now(),
+      createdAt: (data['createdAt'] as Timestamp).toDate(),
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  /// Convert CourseSchedule to Map for Firestore
+  Map<String, dynamic> toMap() {
     return {
       'dayOfWeek': dayOfWeek,
       'startTime': startTime,
       'endTime': endTime,
       'isActive': isActive,
-      'createdAt': createdAt,
+      'createdAt': Timestamp.fromDate(createdAt),
     };
   }
 
-  // Helper method to get formatted time range
+  /// Get a formatted display string for the schedule
+  String get displayString => '$dayOfWeek $startTime - $endTime';
+
+  /// Get time range string (for backward compatibility)
   String get timeRange => '$startTime - $endTime';
 
-  // Helper method to get display text
-  String get displayText => '$dayOfWeek $timeRange';
-
-  @override
-  String toString() => displayText;
+  /// Check if this schedule matches a given DateTime
+  bool matchesDateTime(DateTime dateTime) {
+    final weekdayNames = [
+      '', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+    ];
+    return weekdayNames[dateTime.weekday] == dayOfWeek;
+  }
 }

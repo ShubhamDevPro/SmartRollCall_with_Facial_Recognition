@@ -8,6 +8,7 @@ class AttendanceHistoryCard extends StatelessWidget {
   final VoidCallback onStatusChanged;
   final int totalDays;
   final int presentDays;
+  final String? scheduleInfo; // NEW: Display which schedule this attendance is for
 
   const AttendanceHistoryCard({
     required this.name,
@@ -16,6 +17,7 @@ class AttendanceHistoryCard extends StatelessWidget {
     required this.onStatusChanged,
     this.totalDays = 0,
     this.presentDays = 0,
+    this.scheduleInfo, // NEW: Optional schedule information
     super.key,
   });
 
@@ -84,7 +86,32 @@ class AttendanceHistoryCard extends StatelessWidget {
             name, // Student's full name
             style: const TextStyle(fontWeight: FontWeight.w500),
           ),
-          subtitle: Text('Enrollment No: $enrollNumber'),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Enrollment No: $enrollNumber'),
+              if (scheduleInfo != null) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.schedule, size: 14, color: Colors.blue[700]),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        scheduleInfo!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

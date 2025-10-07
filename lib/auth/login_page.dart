@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'auth_success_animation.dart';
 import '../screens/Student_HomeScreen.dart';
+import '../screens/homescreen.dart'; // Add missing import
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -258,27 +259,55 @@ class _LoginPageState extends State<LoginPage> {
                                 onPressed: () async {
                                   if (_formKey.currentState!.validate()) {
                                     if (isProfessorLogin) {
+                                      // Show loading indicator
+                                      showDialog(
+                                        context: context,
+                                        barrierDismissible: false,
+                                        builder: (context) => const Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                      );
+
                                       final authService = AuthService();
                                       bool success = await authService
                                           .signInWithEmailPassword(
-                                        _emailController.text,
-                                        _passwordController.text,
+                                        _emailController.text.trim(),
+                                        _passwordController.text.trim(),
                                       );
+
+                                      // Hide loading indicator
+                                      if (mounted) Navigator.pop(context);
+
                                       if (success) {
-                                        Navigator.pushReplacement(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (context) =>
-                                                  AuthSuccessAnimation()),
-                                        );
+                                        if (mounted) {
+                                          Navigator.pushReplacement(
+                                            context,
+                                            MaterialPageRoute(
+                                                builder: (context) =>
+                                                    AuthSuccessAnimation()),
+                                          );
+                                        }
+                                      } else {
+                                        // Show error message for authentication failure
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                  'Authentication failed. Please check your credentials and try again.'),
+                                              backgroundColor: Colors.red,
+                                              duration: Duration(seconds: 4),
+                                            ),
+                                          );
+                                        }
                                       }
                                     } else {
                                       // Hardcoded student credentials check
-                                      if ((_emailController.text ==
+                                      if ((_emailController.text.trim() ==
                                                   'shubham.01919051722@ipu.ac.in' &&
-                                              _passwordController.text ==
+                                              _passwordController.text.trim() ==
                                                   '123') ||
-                                          (_emailController.text ==
+                                          (_emailController.text.trim() ==
                                               'test@test.com')) {
                                         Navigator.pushReplacement(
                                           context,

@@ -91,6 +91,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 schedules = [
                   CourseSchedule(
                     id: 'legacy',
+                    batchId: doc.id, // Add required batchId parameter
                     dayOfWeek: dayOfWeek,
                     startTime: startTime,
                     endTime: endTime,
@@ -304,9 +305,10 @@ class _MyHomePageState extends State<MyHomePage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Image.asset(
-            'assets/images/empty_courses.png', // Add an illustration
-            height: 200,
+          Icon(
+            Icons.school_outlined,
+            size: 120,
+            color: Colors.grey[400],
           ),
           const SizedBox(height: 24),
           Text(

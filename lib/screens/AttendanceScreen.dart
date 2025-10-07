@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:smart_roll_call_flutter/models/student.dart';
+import 'package:smart_roll_call_flutter/models/course_schedule.dart';
 import 'package:smart_roll_call_flutter/services/firestore_service.dart';
 import 'package:smart_roll_call_flutter/widgets/AddStudentModal.dart';
 import 'package:smart_roll_call_flutter/screens/View-Edit History/AttendanceHistory.dart';
@@ -37,6 +38,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   // Add this to your state class
   DateTime selectedDate = DateTime.now();
 
+  // NEW: Add schedule-related state variables
+  List<CourseSchedule> availableSchedules = [];
+  CourseSchedule? selectedSchedule;
+  bool isLoadingSchedules = false;
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +54,41 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         filteredStudents = students;
       });
     });
+
+    // NEW: Load available schedules for the batch
+    _loadAvailableSchedules();
+  }
+
+  // NEW: Load available schedules from Firestore
+  void _loadAvailableSchedules() async {
+    setState(() {
+      isLoadingSchedules = true;
+    });
+
+    try {
+      final schedules = await _firestoreService.getSchedulesForDate(widget.batchId, selectedDate);
+      setState(() {
+        availableSchedules = schedules;
+        // Automatically select the first schedule if available
+        if (schedules.isNotEmpty) {
+          selectedSchedule = schedules.first;
+        }
+      });
+    } catch (e) {
+      // Handle error (e.g., show a snackbar)
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading schedules: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        isLoadingSchedules = false;
+      });
+    }
   }
 
   /// Filters the student list based on search query
@@ -71,12 +112,23 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     super.dispose();
   }
 
-  /// Saves the current attendance state to Firestore
+  /// Saves the current attendance state to Firestore with schedule linking
   /// Shows success/error messages and navigates to history screen on success
   void _saveAttendance() async {
     // Ensure keyboard is dismissed before proceeding
     FocusManager.instance.primaryFocus?.unfocus();
     await Future.delayed(const Duration(milliseconds: 100));
+
+    // Check if a schedule is selected
+    if (selectedSchedule == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a class schedule first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
     // Store the ScaffoldMessenger reference early to avoid widget tree lookup issues
     final scaffoldMessenger = ScaffoldMessenger.of(context);
@@ -92,22 +144,24 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               })
           .toList();
 
-      // Save attendance data for current date
-      await _firestoreService.saveAttendanceForDate(
+      // NEW: Save attendance data with schedule link
+      await _firestoreService.saveAttendanceWithSchedule(
         widget.batchId,
+        selectedSchedule!.id,
         selectedDate,
         attendanceData,
+        markedBy: 'Teacher',
       );
 
       // Check if widget is still mounted before showing SnackBar
       if (!mounted) return;
 
-      // Show success message
+      // Show success message with schedule info
       scaffoldMessenger.showSnackBar(
-        const SnackBar(
-          content: Text('Attendance saved successfully!'),
+        SnackBar(
+          content: Text('Attendance saved for ${selectedSchedule!.displayString}!'),
           behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
 
@@ -192,8 +246,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (picked != null && picked != selectedDate) {
       setState(() {
         selectedDate = picked;
+        // Reset selected schedule when date changes
+        selectedSchedule = null;
       });
-      // Add logic here to load attendance for selected date
+
+      // Reload schedules for the new selected date
+      _loadAvailableSchedules();
     }
   }
 
@@ -349,6 +407,96 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 16),
+                      // NEW: Schedule selection widget
+                      if (availableSchedules.isNotEmpty) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.schedule,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Select Class Schedule',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              DropdownButtonHideUnderline(
+                                child: DropdownButton<CourseSchedule>(
+                                  value: selectedSchedule,
+                                  isExpanded: true,
+                                  dropdownColor: theme.primaryColor.withOpacity(0.9),
+                                  style: const TextStyle(color: Colors.white),
+                                  icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                                  items: availableSchedules.map((schedule) {
+                                    return DropdownMenuItem<CourseSchedule>(
+                                      value: schedule,
+                                      child: Text(
+                                        schedule.displayString,
+                                        style: const TextStyle(color: Colors.white),
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (CourseSchedule? newSchedule) {
+                                    setState(() {
+                                      selectedSchedule = newSchedule;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else if (!isLoadingSchedules) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.warning,
+                                color: Colors.orange,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'No schedules found for ${_getCurrentDate()}',
+                                style: const TextStyle(
+                                  color: Colors.orange,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
                     ],
                   ),
                 ),

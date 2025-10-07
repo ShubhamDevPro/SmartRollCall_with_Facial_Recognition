@@ -22,14 +22,20 @@ service cloud.firestore {
         match /students/{studentId} {
           allow read, write: if true;
 
-          // Attendance records
+          // Attendance records (legacy structure for backward compatibility)
           match /attendance/{attendanceId} {
             allow read, write: if true;
           }
         }
       }
     }
-    
+
+    // NEW: Global attendance records collection for schedule-linked attendance
+    // This collection stores attendance records linked to specific class schedules
+    match /attendance_records/{recordId} {
+      allow read, write: if true;
+    }
+
     // ESP32 Integration Rules (Demo Mode)
     // Allow ESP32 to read student MAC addresses and write attendance
     match /{document=**} {

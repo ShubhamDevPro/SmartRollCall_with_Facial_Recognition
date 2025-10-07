@@ -1,44 +1,99 @@
 import 'package:flutter/material.dart';
+import 'package:smart_roll_call_flutter/services/firestore_service.dart';
+import 'package:smart_roll_call_flutter/models/attendance_record.dart';
+import 'package:smart_roll_call_flutter/models/course_schedule.dart';
 import 'attendance_dashboard.dart';
 import '../auth/auth_page.dart';
 
-void main() {
-  runApp(MyApp());
-}
+/// Enhanced Student Home Screen that demonstrates the new schedule-linked attendance system
+/// Now students can see exactly which class schedules they attended, not just dates
+class StudentHomeScreen extends StatefulWidget {
+  final String studentId;
+  final String batchId;
+  final String studentName;
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const StudentHomeScreen({
+    super.key,
+    required this.studentId,
+    required this.batchId,
+    required this.studentName,
+  });
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      home: MyHomePage(),
-    );
-  }
+  _StudentHomeScreenState createState() => _StudentHomeScreenState();
 }
 
-class MyHomePage extends StatelessWidget {
-  const MyHomePage({super.key});
+class _StudentHomeScreenState extends State<StudentHomeScreen> {
+  final FirestoreService _firestoreService = FirestoreService();
+  StudentAttendanceSummary? attendanceSummary;
+  Map<String, CourseSchedule> scheduleCache = {};
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStudentAttendance();
+  }
+
+  /// Load student's attendance records with schedule information
+  void _loadStudentAttendance() async {
+    try {
+      // Get student's attendance summary with schedule links
+      final summary = await _firestoreService.getStudentAttendanceSummary(
+        widget.studentId,
+        widget.batchId,
+      );
+
+      // Cache schedule information for display
+      final allSchedules = await _firestoreService.getCourseSchedulesList(widget.batchId);
+      final scheduleMap = Map.fromEntries(
+        allSchedules.map((schedule) => MapEntry(schedule.id, schedule))
+      );
+
+      setState(() {
+        attendanceSummary = summary;
+        scheduleCache = scheduleMap;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading attendance: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Student Attendance",
-            style: TextStyle(fontWeight: FontWeight.w600)),
+        title: Text(
+          "Welcome, ${widget.studentName}",
+          style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+        ),
         backgroundColor: Colors.blue.shade700,
         elevation: 2,
         actions: [
           IconButton(
-            icon: Icon(Icons.notifications_outlined),
-            onPressed: () {},
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: _loadStudentAttendance,
           ),
           IconButton(
-            icon: Icon(Icons.settings_outlined),
-            onPressed: () {},
+            icon: const Icon(Icons.dashboard, color: Colors.white),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AttendanceDashboard()),
+              );
+            },
           ),
           IconButton(
-            icon: Icon(Icons.logout),
+            icon: const Icon(Icons.logout, color: Colors.white),
             onPressed: () {
               Navigator.pushReplacement(
                 context,
@@ -48,226 +103,285 @@ class MyHomePage extends StatelessWidget {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Attendance Summary Card
+                  _buildAttendanceSummaryCard(),
+                  const SizedBox(height: 20),
+
+                  // Recent Attendance with Schedule Information
+                  _buildRecentAttendanceSection(),
+                  const SizedBox(height: 20),
+
+                  // Schedule-wise Attendance Breakdown
+                  _buildScheduleWiseAttendance(),
+                ],
+              ),
+            ),
+    );
+  }
+
+  /// Build attendance summary card showing overall statistics
+  Widget _buildAttendanceSummaryCard() {
+    if (attendanceSummary == null) {
+      return const Card(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              // User Profile Section with enhanced styling
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
+          padding: EdgeInsets.all(16),
+          child: Text('No attendance data available'),
+        ),
+      );
+    }
+
+    final totalClasses = attendanceSummary!.attendanceRecords.length;
+    final attendedClasses = attendanceSummary!.attendanceRecords
+        .where((record) => record.isPresent)
+        .length;
+    final attendancePercentage = attendanceSummary!.attendancePercentage;
+
+    return Card(
+      elevation: 4,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          gradient: LinearGradient(
+            colors: [Colors.blue.shade700, Colors.blue.shade500],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Your Attendance Summary',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatColumn('Total Classes', '$totalClasses', Icons.class_),
+                _buildStatColumn('Attended', '$attendedClasses', Icons.check_circle),
+                _buildStatColumn('Percentage', '${attendancePercentage.toStringAsFixed(1)}%', Icons.trending_up),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build individual stat column for summary card
+  Widget _buildStatColumn(String label, String value, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white, size: 24),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.white70,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Build recent attendance section showing specific class schedules attended
+  Widget _buildRecentAttendanceSection() {
+    if (attendanceSummary == null || attendanceSummary!.attendanceRecords.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('No recent attendance records'),
+        ),
+      );
+    }
+
+    // Get recent 10 attendance records
+    final recentRecords = attendanceSummary!.attendanceRecords.take(10).toList();
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Recent Attendance',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            ...recentRecords.map((record) => _buildAttendanceRecordTile(record)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build individual attendance record tile showing specific schedule attended
+  Widget _buildAttendanceRecordTile(AttendanceRecord record) {
+    final schedule = scheduleCache[record.scheduleId];
+    final dateStr = '${record.date.day}/${record.date.month}/${record.date.year}';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: record.isPresent ? Colors.green.shade50 : Colors.red.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: record.isPresent ? Colors.green.shade200 : Colors.red.shade200,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            record.isPresent ? Icons.check_circle : Icons.cancel,
+            color: record.isPresent ? Colors.green : Colors.red,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  schedule?.displayString ?? 'Unknown Schedule',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 35,
-                      backgroundColor: Colors.blue.shade400,
-                      child: Icon(
-                        Icons.person,
-                        size: 40,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Shubham Dev",
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            "shubham.01919051722@ipu.ac.in",
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade700,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                Text(
+                  '$dateStr • ${record.isPresent ? 'Present' : 'Absent'}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (record.markedBy != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: record.markedBy == 'ESP32' ? Colors.blue.shade100 : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                record.markedBy!,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: record.markedBy == 'ESP32' ? Colors.blue.shade700 : Colors.grey.shade700,
                 ),
               ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
-              SizedBox(height: 24),
+  /// Build schedule-wise attendance breakdown showing attendance per time slot
+  Widget _buildScheduleWiseAttendance() {
+    if (attendanceSummary == null || scheduleCache.isEmpty) {
+      return const SizedBox();
+    }
 
-              // Welcome Message with enhanced styling
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(20),
+    final scheduleAttendance = attendanceSummary!.getAttendanceBySchedule();
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Attendance by Class Schedule',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const Text(
+              'See which specific time slots you attended most',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            ...scheduleAttendance.entries.map((entry) {
+              final schedule = scheduleCache[entry.key];
+              final attendedCount = entry.value;
+              final totalForSchedule = attendanceSummary!.attendanceRecords
+                  .where((record) => record.scheduleId == entry.key)
+                  .length;
+              final percentage = totalForSchedule > 0
+                  ? (attendedCount / totalForSchedule * 100)
+                  : 0.0;
+
+              return Container(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.blue.shade400, Colors.blue.shade600],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      "Hi, Shubham.",
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          schedule?.displayString ?? 'Unknown Schedule',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          '${percentage.toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: percentage >= 75 ? Colors.green : Colors.orange,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(
+                      value: percentage / 100,
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        percentage >= 75 ? Colors.green : Colors.orange,
                       ),
                     ),
+                    const SizedBox(height: 4),
                     Text(
-                      "Welcome to your Class",
+                      'Attended $attendedCount out of $totalForSchedule classes',
                       style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
                       ),
                     ),
                   ],
                 ),
-              ),
-
-              SizedBox(height: 24),
-
-              // Today's Classes Section
-              Text(
-                "Today's Classes",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade800,
-                ),
-              ),
-              SizedBox(height: 12),
-              Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    _buildClassItem("DA", "Data Analytics", "09:00 am",
-                        Colors.blue.shade400),
-                    Divider(height: 1),
-                    _buildClassItem("OS", "Operating System", "10:00 am",
-                        Colors.green.shade400),
-                    Divider(height: 1),
-                    _buildClassItem("DS", "Data Structure", "11:00 am",
-                        Colors.orange.shade400),
-                    Divider(height: 1),
-                    _buildClassItem(
-                        "F", "Flutter", "12:00 pm", Colors.purple.shade400),
-                  ],
-                ),
-              ),
-
-              SizedBox(height: 24),
-
-              // Other Options with enhanced styling
-              Text(
-                "Quick Actions",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade800,
-                ),
-              ),
-              SizedBox(height: 12),
-              _buildOptionItem(
-                  "Check Attendance Report", Icons.bar_chart, context),
-              _buildOptionItem("Faculty Details", Icons.people, context),
-              _buildOptionItem("Class Details", Icons.class_, context),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildClassItem(
-      String initial, String className, String time, Color color) {
-    return ListTile(
-      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      leading: CircleAvatar(
-        backgroundColor: color,
-        child: Text(
-          initial,
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      title: Text(
-        className,
-        style: TextStyle(
-          fontWeight: FontWeight.w600,
-          fontSize: 16,
-        ),
-      ),
-      trailing: Container(
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          time,
-          style: TextStyle(
-            color: Colors.grey.shade700,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-      onTap: () {},
-    );
-  }
-
-  Widget _buildOptionItem(String title, IconData icon, BuildContext context) {
-    return Card(
-      elevation: 2,
-      margin: EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        onTap: () {
-          if (title == "Check Attendance Report") {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => AttendanceDashboard()),
-            );
-          }
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Row(
-            children: [
-              Icon(icon, color: Colors.blue.shade700),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Icon(Icons.arrow_forward_ios, size: 18, color: Colors.grey),
-            ],
-          ),
+              );
+            }).toList(),
+          ],
         ),
       ),
     );

@@ -34,6 +34,8 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   List<Map<String, dynamic>> filteredAttendanceData = [];
   // Loading state flag
   bool isLoading = false;
+  // NEW: Cache for schedule information
+  Map<String, String> scheduleCache = {};
 
   @override
   void initState() {
@@ -84,6 +86,15 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         selectedDate,
         widget.batchId,
       );
+
+      // NEW: Load schedule information for display
+      if (widget.batchId != null) {
+        final schedules = await _firestoreService.getCourseSchedulesList(widget.batchId!);
+        scheduleCache = Map.fromEntries(
+          schedules.map((schedule) => MapEntry(schedule.id, schedule.displayString))
+        );
+      }
+
       setState(() {
         attendanceData = data;
         filteredAttendanceData = data;
@@ -113,12 +124,24 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     try {
       // Toggle the attendance status
       final newStatus = !student['isPresent'];
-      await _firestoreService.updateAttendanceStatus(
-        student['batchId'],
-        student['enrollNumber'],
-        selectedDate,
-        newStatus,
-      );
+      final attendanceRecordId = student['attendanceRecordId'] as String?;
+      
+      if (attendanceRecordId != null) {
+        // NEW: Use new method that updates attendance_records collection
+        await _firestoreService.updateAttendanceRecord(
+          attendanceRecordId,
+          newStatus,
+        );
+      } else {
+        // Fallback to old method for backward compatibility
+        await _firestoreService.updateAttendanceStatus(
+          student['batchId'],
+          student['enrollNumber'],
+          selectedDate,
+          newStatus,
+        );
+      }
+      
       // Reload data to reflect changes
       await _loadAttendanceData();
 
@@ -354,6 +377,12 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                         itemCount: filteredAttendanceData.length,
                         itemBuilder: (context, index) {
                           final student = filteredAttendanceData[index];
+                          // NEW: Get schedule information for display
+                          final scheduleId = student['scheduleId'] as String?;
+                          final scheduleInfo = scheduleId != null 
+                              ? scheduleCache[scheduleId] 
+                              : null;
+                          
                           return AttendanceHistoryCard(
                             name: student['name'],
                             enrollNumber: student['enrollNumber'],
@@ -362,6 +391,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                                 _updateAttendanceStatus(student),
                             totalDays: student['totalDays'] ?? 0,
                             presentDays: student['presentDays'] ?? 0,
+                            scheduleInfo: scheduleInfo, // NEW: Pass schedule info
                           );
                         },
                       ),
