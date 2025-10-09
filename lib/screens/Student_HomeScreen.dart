@@ -45,10 +45,10 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       );
 
       // Cache schedule information for display
-      final allSchedules = await _firestoreService.getCourseSchedulesList(widget.batchId);
+      final allSchedules =
+          await _firestoreService.getCourseSchedulesList(widget.batchId);
       final scheduleMap = Map.fromEntries(
-        allSchedules.map((schedule) => MapEntry(schedule.id, schedule))
-      );
+          allSchedules.map((schedule) => MapEntry(schedule.id, schedule)));
 
       setState(() {
         attendanceSummary = summary;
@@ -72,11 +72,26 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          "Welcome, ${widget.studentName}",
-          style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Welcome, ${widget.studentName}",
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                  fontSize: 18),
+            ),
+            const Text(
+              "Student Portal",
+              style: TextStyle(
+                  fontWeight: FontWeight.w400,
+                  color: Colors.white70,
+                  fontSize: 12),
+            ),
+          ],
         ),
-        backgroundColor: Colors.blue.shade700,
+        backgroundColor: Colors.green.shade700,
         elevation: 2,
         actions: [
           IconButton(
@@ -88,7 +103,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const AttendanceDashboard()),
+                MaterialPageRoute(
+                    builder: (context) => const AttendanceDashboard()),
               );
             },
           ),
@@ -170,9 +186,14 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildStatColumn('Total Classes', '$totalClasses', Icons.class_),
-                _buildStatColumn('Attended', '$attendedClasses', Icons.check_circle),
-                _buildStatColumn('Percentage', '${attendancePercentage.toStringAsFixed(1)}%', Icons.trending_up),
+                _buildStatColumn(
+                    'Total Classes', '$totalClasses', Icons.class_),
+                _buildStatColumn(
+                    'Attended', '$attendedClasses', Icons.check_circle),
+                _buildStatColumn(
+                    'Percentage',
+                    '${attendancePercentage.toStringAsFixed(1)}%',
+                    Icons.trending_up),
               ],
             ),
           ],
@@ -208,7 +229,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
 
   /// Build recent attendance section showing specific class schedules attended
   Widget _buildRecentAttendanceSection() {
-    if (attendanceSummary == null || attendanceSummary!.attendanceRecords.isEmpty) {
+    if (attendanceSummary == null ||
+        attendanceSummary!.attendanceRecords.isEmpty) {
       return const Card(
         child: Padding(
           padding: EdgeInsets.all(16),
@@ -218,7 +240,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     }
 
     // Get recent 10 attendance records
-    final recentRecords = attendanceSummary!.attendanceRecords.take(10).toList();
+    final recentRecords =
+        attendanceSummary!.attendanceRecords.take(10).toList();
 
     return Card(
       elevation: 2,
@@ -232,7 +255,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            ...recentRecords.map((record) => _buildAttendanceRecordTile(record)),
+            ...recentRecords
+                .map((record) => _buildAttendanceRecordTile(record)),
           ],
         ),
       ),
@@ -242,7 +266,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   /// Build individual attendance record tile showing specific schedule attended
   Widget _buildAttendanceRecordTile(AttendanceRecord record) {
     final schedule = scheduleCache[record.scheduleId];
-    final dateStr = '${record.date.day}/${record.date.month}/${record.date.year}';
+    final dateStr =
+        '${record.date.day}/${record.date.month}/${record.date.year}';
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -284,14 +309,18 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: record.markedBy == 'ESP32' ? Colors.blue.shade100 : Colors.grey.shade100,
+                color: record.markedBy == 'ESP32'
+                    ? Colors.blue.shade100
+                    : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 record.markedBy!,
                 style: TextStyle(
                   fontSize: 10,
-                  color: record.markedBy == 'ESP32' ? Colors.blue.shade700 : Colors.grey.shade700,
+                  color: record.markedBy == 'ESP32'
+                      ? Colors.blue.shade700
+                      : Colors.grey.shade700,
                 ),
               ),
             ),
@@ -356,7 +385,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                           '${percentage.toStringAsFixed(1)}%',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            color: percentage >= 75 ? Colors.green : Colors.orange,
+                            color:
+                                percentage >= 75 ? Colors.green : Colors.orange,
                           ),
                         ),
                       ],

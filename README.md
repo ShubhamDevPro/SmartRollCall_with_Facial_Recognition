@@ -48,7 +48,7 @@ lib/
 ├── auth/                    # Authentication related screens
 │   ├── auth_page.dart      # Main authentication wrapper
 │   ├── login_page.dart     # Login interface
-│   └── home_page.dart      # Post-login home
+│   └── logout_page.dart      # Post-login home
 ├── models/
 │   └── student.dart        # Student data model
 ├── screens/

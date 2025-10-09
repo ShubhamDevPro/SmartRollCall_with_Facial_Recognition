@@ -1,10 +1,10 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables
 
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import 'auth_success_animation.dart';
 import '../screens/Student_HomeScreen.dart';
-import '../screens/homescreen.dart'; // Add missing import
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -309,11 +309,25 @@ class _LoginPageState extends State<LoginPage> {
                                                   '123') ||
                                           (_emailController.text.trim() ==
                                               'test@test.com')) {
+                                        // Sign out any existing Firebase session for student login
+                                        await FirebaseAuth.instance.signOut();
+
+                                        if (!mounted) return;
+
                                         Navigator.pushReplacement(
                                           context,
                                           MaterialPageRoute(
                                               builder: (context) =>
-                                                  MyHomePage()),
+                                                  StudentHomeScreen(
+                                                    studentId: 'S001',
+                                                    batchId: 'batch_001',
+                                                    studentName: _emailController
+                                                                .text
+                                                                .trim() ==
+                                                            'shubham.01919051722@ipu.ac.in'
+                                                        ? 'Shubham'
+                                                        : 'Test Student',
+                                                  )),
                                         );
                                       } else {
                                         // Show error message for invalid credentials
