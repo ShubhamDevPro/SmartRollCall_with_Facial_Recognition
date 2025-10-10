@@ -1028,34 +1028,69 @@ class FirestoreService {
           .doc(batchId)
           .collection('students')
           .get();
+      
+      // Get batch/course information for denormalization
+      final batchDoc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('batches')
+          .doc(batchId)
+          .get();
+      
+      final courseName = batchDoc.data()?['courseName'] ?? 'Unknown Course';
+      
+      // Get professor information
+      final professorDoc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .get();
+      
+      final professorName = professorDoc.data()?['name'] ?? 'Unknown Professor';
 
-      // Create a map of enrollment numbers to student IDs for quick lookup
-      final studentMap = Map.fromEntries(studentsSnapshot.docs.map(
-          (doc) => MapEntry(doc.data()['enrollNumber'] as String, doc.id)));
+      // Create a map of enrollment numbers to student data for quick lookup
+      final studentDataMap = Map.fromEntries(studentsSnapshot.docs.map((doc) {
+        final data = doc.data();
+        return MapEntry(
+          data['enrollNumber'] as String,
+          {
+            'id': doc.id,
+            'name': data['name'] ?? 'Unknown Student',
+            'enrollNumber': data['enrollNumber'],
+          },
+        );
+      }));
 
       // Save attendance records in a global attendance collection for easy querying
-      for (var studentData in attendanceData) {
-        final studentId = studentMap[studentData['enrollNumber']];
-        if (studentId != null) {
+      for (var studentAttendance in attendanceData) {
+        final enrollNumber = studentAttendance['enrollNumber'];
+        final studentInfo = studentDataMap[enrollNumber];
+        
+        if (studentInfo != null) {
           // Create attendance record in global collection with unique ID
           final attendanceRef =
               _firestore.collection('attendance_records').doc();
           final attendanceRecord = AttendanceRecord(
             id: attendanceRef.id,
-            studentId: studentId,
+            studentId: studentInfo['id'],
             batchId: batchId,
             scheduleId: scheduleId,
             date: date,
-            isPresent: studentData['isPresent'] ?? false,
+            isPresent: studentAttendance['isPresent'] ?? false,
             markedAt: now,
             markedBy: markedBy,
+            // NEW: Add denormalized data for easy student queries
+            studentEnrollment: enrollNumber,
+            studentName: studentInfo['name'],
+            professorId: userId,
+            professorName: professorName,
+            courseName: courseName,
           );
 
           batch.set(attendanceRef, attendanceRecord.toMap());
 
           // FIXED: Use composite key (date + scheduleId) to prevent overwrites when multiple classes exist on same date
           final studentRef = studentsSnapshot.docs
-              .firstWhere((doc) => doc.id == studentId)
+              .firstWhere((doc) => doc.id == studentInfo['id'])
               .reference;
 
           final dateStr =
@@ -1067,7 +1102,7 @@ class FirestoreService {
 
           batch.set(oldAttendanceRef, {
             'date': Timestamp.fromDate(date),
-            'isPresent': studentData['isPresent'],
+            'isPresent': studentAttendance['isPresent'],
             'scheduleId': scheduleId, // Add schedule reference to old structure
             'markedAt': Timestamp.fromDate(now),
             'markedBy': markedBy,

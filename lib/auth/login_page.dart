@@ -3,8 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
+import '../services/student_profile_service.dart';
 import 'auth_success_animation.dart';
-import '../screens/Student_HomeScreen.dart';
+import '../screens/enrollment_setup_screen.dart';
+import '../screens/student_attendance_view_screen.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -302,9 +304,10 @@ class _LoginPageState extends State<LoginPage> {
                                         }
                                       }
                                     } else {
+                                      // Student Login Flow
                                       // Hardcoded student credentials check
                                       if ((_emailController.text.trim() ==
-                                                  'shubham.01919051722@ipu.ac.in' &&
+                                                  'deepak.09619051722@ipu.ac.in' &&
                                               _passwordController.text.trim() ==
                                                   '123') ||
                                           (_emailController.text.trim() ==
@@ -314,21 +317,64 @@ class _LoginPageState extends State<LoginPage> {
 
                                         if (!mounted) return;
 
-                                        Navigator.pushReplacement(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (context) =>
-                                                  StudentHomeScreen(
-                                                    studentId: 'S001',
-                                                    batchId: 'batch_001',
-                                                    studentName: _emailController
-                                                                .text
-                                                                .trim() ==
-                                                            'shubham.01919051722@ipu.ac.in'
-                                                        ? 'Shubham'
-                                                        : 'Test Student',
-                                                  )),
+                                        // Show loading indicator
+                                        showDialog(
+                                          context: context,
+                                          barrierDismissible: false,
+                                          builder: (context) => const Center(
+                                            child: CircularProgressIndicator(),
+                                          ),
                                         );
+
+                                        // Check if student email ID exists in student_profiles
+                                        final studentProfileService =
+                                            StudentProfileService();
+                                        final studentEmail =
+                                            _emailController.text.trim();
+                                        final studentName = studentEmail ==
+                                                'deepak.09619051722@ipu.ac.in'
+                                            ? 'Deepak'
+                                            : 'Test Student';
+
+                                        // Check by email ID
+                                        final profile =
+                                            await studentProfileService
+                                                .getStudentProfileByEmail(studentEmail);
+
+                                        // Hide loading indicator
+                                        if (mounted) Navigator.pop(context);
+
+                                        if (!mounted) return;
+
+                                        if (profile != null &&
+                                            profile.containsKey(
+                                                'enrollmentNumber')) {
+                                          // Student email exists with enrollment number, show attendance
+                                          Navigator.pushReplacement(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  StudentAttendanceViewScreen(
+                                                studentEmail: studentEmail,
+                                                studentName: profile['name'] ?? studentName,
+                                                enrollmentNumber:
+                                                    profile['enrollmentNumber'],
+                                              ),
+                                            ),
+                                          );
+                                        } else {
+                                          // First time login (email not found), ask for enrollment number
+                                          Navigator.pushReplacement(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  EnrollmentSetupScreen(
+                                                studentEmail: studentEmail,
+                                                studentName: studentName,
+                                              ),
+                                            ),
+                                          );
+                                        }
                                       } else {
                                         // Show error message for invalid credentials
                                         ScaffoldMessenger.of(context)

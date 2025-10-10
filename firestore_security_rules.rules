@@ -5,26 +5,38 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Demo version - allow access to all user data
+    // CRITICAL: Allow listing collections (not just reading specific documents)
+    // Students need to query ALL teachers to find their enrollment numbers
+    
     match /users/{userId} {
-      allow read, write: if true;
+      // Allow anyone to list all users and read any user document
+      allow read, list: if true;
+      // Only authenticated users can write
+      allow write: if request.auth != null;
 
       // Batches collection
       match /batches/{batchId} {
-        allow read, write: if true;
+        // Allow anyone to list and read batches
+        allow read, list: if true;
+        allow write: if request.auth != null;
 
         // NEW: Schedules subcollection for multi-schedule courses
         match /schedules/{scheduleId} {
-          allow read, write: if true;
+          allow read, list: if true;
+          allow write: if request.auth != null;
         }
 
         // Students in batches
         match /students/{studentId} {
-          allow read, write: if true;
+          // Allow anyone to list and read students (for enrollment matching)
+          allow read, list: if true;
+          allow write: if request.auth != null;
 
           // Attendance records (legacy structure for backward compatibility)
           match /attendance/{attendanceId} {
-            allow read, write: if true;
+            // Allow anyone to list and read attendance
+            allow read, list: if true;
+            allow write: if request.auth != null;
           }
         }
       }
@@ -33,6 +45,11 @@ service cloud.firestore {
     // NEW: Global attendance records collection for schedule-linked attendance
     // This collection stores attendance records linked to specific class schedules
     match /attendance_records/{recordId} {
+      allow read, write: if true;
+    }
+
+    // NEW: Student profiles collection for student login and enrollment management
+    match /student_profiles/{profileId} {
       allow read, write: if true;
     }
 

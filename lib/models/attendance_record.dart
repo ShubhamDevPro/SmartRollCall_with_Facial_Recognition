@@ -10,6 +10,13 @@ class AttendanceRecord {
   final bool isPresent;
   final DateTime markedAt; // When the attendance was recorded
   final String? markedBy; // Who marked the attendance (teacher, ESP32, etc.)
+  
+  // NEW: Student info for easy querying (denormalized data)
+  final String? studentEnrollment; // For direct student queries
+  final String? studentName;
+  final String? professorId;
+  final String? professorName;
+  final String? courseName;
 
   AttendanceRecord({
     required this.id,
@@ -20,6 +27,11 @@ class AttendanceRecord {
     required this.isPresent,
     required this.markedAt,
     this.markedBy,
+    this.studentEnrollment,
+    this.studentName,
+    this.professorId,
+    this.professorName,
+    this.courseName,
   });
 
   /// Factory constructor to create AttendanceRecord from Firestore document
@@ -34,6 +46,11 @@ class AttendanceRecord {
       isPresent: data['isPresent'] ?? false,
       markedAt: (data['markedAt'] as Timestamp).toDate(),
       markedBy: data['markedBy'],
+      studentEnrollment: data['studentEnrollment'],
+      studentName: data['studentName'],
+      professorId: data['professorId'],
+      professorName: data['professorName'],
+      courseName: data['courseName'],
     );
   }
 
@@ -50,6 +67,23 @@ class AttendanceRecord {
 
     if (markedBy != null) {
       map['markedBy'] = markedBy!;
+    }
+    
+    // Add denormalized student info for easy querying
+    if (studentEnrollment != null) {
+      map['studentEnrollment'] = studentEnrollment!;
+    }
+    if (studentName != null) {
+      map['studentName'] = studentName!;
+    }
+    if (professorId != null) {
+      map['professorId'] = professorId!;
+    }
+    if (professorName != null) {
+      map['professorName'] = professorName!;
+    }
+    if (courseName != null) {
+      map['courseName'] = courseName!;
     }
 
     return map;
