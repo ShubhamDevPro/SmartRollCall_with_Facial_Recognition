@@ -6,7 +6,7 @@ import 'package:smart_roll_call_flutter/screens/MultiScheduleCourseModal.dart';
 import 'package:smart_roll_call_flutter/screens/CourseDetailsScreen.dart';
 import 'package:smart_roll_call_flutter/services/firestore_service.dart';
 import 'package:smart_roll_call_flutter/screens/settings_screen.dart';
-import 'package:smart_roll_call_flutter/screens/attendance_overview_screen.dart';
+import 'package:smart_roll_call_flutter/screens/Attendance_Trends.dart';
 import 'package:smart_roll_call_flutter/models/course_schedule.dart';
 
 // Main widget for the home page

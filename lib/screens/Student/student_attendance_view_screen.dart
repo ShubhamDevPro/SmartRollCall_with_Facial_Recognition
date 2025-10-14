@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../auth/auth_page.dart';
-import '../services/optimized_student_attendance_service.dart';
+import '../../auth/auth_page.dart';
+import '../../services/optimized_student_attendance_service.dart';
 import 'package:intl/intl.dart';
 
 /// Screen to display student's own attendance using optimized flat database structure

@@ -5,8 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import '../services/student_profile_service.dart';
 import 'auth_success_animation.dart';
-import '../screens/enrollment_setup_screen.dart';
-import '../screens/student_attendance_view_screen.dart';
+import '../screens/Student/enrollment_setup_screen.dart';
+import '../screens/Student/student_attendance_view_screen.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
