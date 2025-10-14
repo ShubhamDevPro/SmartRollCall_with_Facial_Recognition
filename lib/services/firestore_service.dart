@@ -1045,7 +1045,7 @@ class FirestoreService {
           .doc(userId)
           .get();
       
-      final professorName = professorDoc.data()?['name'] ?? 'Unknown Professor';
+      final professorName = professorDoc.data()?['displayName'] ?? 'Unknown Professor';
 
       // Create a map of enrollment numbers to student data for quick lookup
       final studentDataMap = Map.fromEntries(studentsSnapshot.docs.map((doc) {

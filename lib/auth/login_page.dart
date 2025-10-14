@@ -307,7 +307,7 @@ class _LoginPageState extends State<LoginPage> {
                                       // Student Login Flow
                                       // Hardcoded student credentials check
                                       if ((_emailController.text.trim() ==
-                                                  'deepak.09619051722@ipu.ac.in' &&
+                                                  'shubham.01919051722@ipu.ac.in' &&
                                               _passwordController.text.trim() ==
                                                   '123') ||
                                           (_emailController.text.trim() ==
@@ -339,7 +339,8 @@ class _LoginPageState extends State<LoginPage> {
                                         // Check by email ID
                                         final profile =
                                             await studentProfileService
-                                                .getStudentProfileByEmail(studentEmail);
+                                                .getStudentProfileByEmail(
+                                                    studentEmail);
 
                                         // Hide loading indicator
                                         if (mounted) Navigator.pop(context);
@@ -356,7 +357,8 @@ class _LoginPageState extends State<LoginPage> {
                                               builder: (context) =>
                                                   StudentAttendanceViewScreen(
                                                 studentEmail: studentEmail,
-                                                studentName: profile['name'] ?? studentName,
+                                                studentName: profile['name'] ??
+                                                    studentName,
                                                 enrollmentNumber:
                                                     profile['enrollmentNumber'],
                                               ),
