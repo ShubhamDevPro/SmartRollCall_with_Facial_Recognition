@@ -1028,7 +1028,7 @@ class FirestoreService {
           .doc(batchId)
           .collection('students')
           .get();
-      
+
       // Get batch/course information for denormalization
       final batchDoc = await _firestore
           .collection('users')
@@ -1036,16 +1036,15 @@ class FirestoreService {
           .collection('batches')
           .doc(batchId)
           .get();
-      
-      final courseName = batchDoc.data()?['courseName'] ?? 'Unknown Course';
-      
+
+      final courseName = batchDoc.data()?['batchName'] ?? 'Unknown Course';
+
       // Get professor information
-      final professorDoc = await _firestore
-          .collection('users')
-          .doc(userId)
-          .get();
-      
-      final professorName = professorDoc.data()?['displayName'] ?? 'Unknown Professor';
+      final professorDoc =
+          await _firestore.collection('users').doc(userId).get();
+
+      final professorName =
+          professorDoc.data()?['displayName'] ?? 'Unknown Professor';
 
       // Create a map of enrollment numbers to student data for quick lookup
       final studentDataMap = Map.fromEntries(studentsSnapshot.docs.map((doc) {
@@ -1064,7 +1063,7 @@ class FirestoreService {
       for (var studentAttendance in attendanceData) {
         final enrollNumber = studentAttendance['enrollNumber'];
         final studentInfo = studentDataMap[enrollNumber];
-        
+
         if (studentInfo != null) {
           // Create attendance record in global collection with unique ID
           final attendanceRef =
