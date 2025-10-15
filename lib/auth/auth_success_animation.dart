@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../screens/homescreen.dart';
+import '../screens/Professor/homescreen.dart';
 
 // Widget to show an animation when authentication is successful
 class AuthSuccessAnimation extends StatefulWidget {

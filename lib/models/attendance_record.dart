@@ -10,7 +10,7 @@ class AttendanceRecord {
   final bool isPresent;
   final DateTime markedAt; // When the attendance was recorded
   final String? markedBy; // Who marked the attendance (teacher, ESP32, etc.)
-  
+
   // NEW: Student info for easy querying (denormalized data)
   final String? studentEnrollment; // For direct student queries
   final String? studentName;
@@ -68,7 +68,7 @@ class AttendanceRecord {
     if (markedBy != null) {
       map['markedBy'] = markedBy!;
     }
-    
+
     // Add denormalized student info for easy querying
     if (studentEnrollment != null) {
       map['studentEnrollment'] = studentEnrollment!;
@@ -87,49 +87,5 @@ class AttendanceRecord {
     }
 
     return map;
-  }
-
-  /// Get formatted date string
-  String get formattedDate {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
-}
-
-/// Represents attendance summary for a student showing which specific classes they attended
-class StudentAttendanceSummary {
-  final String studentId;
-  final String studentName;
-  final String enrollNumber;
-  final List<AttendanceRecord> attendanceRecords;
-
-  StudentAttendanceSummary({
-    required this.studentId,
-    required this.studentName,
-    required this.enrollNumber,
-    required this.attendanceRecords,
-  });
-
-  /// Get attendance records for a specific date
-  List<AttendanceRecord> getAttendanceForDate(DateTime date) {
-    final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-    return attendanceRecords.where((record) => record.formattedDate == dateStr).toList();
-  }
-
-  /// Get total attendance percentage
-  double get attendancePercentage {
-    if (attendanceRecords.isEmpty) return 0.0;
-    final presentCount = attendanceRecords.where((record) => record.isPresent).length;
-    return (presentCount / attendanceRecords.length) * 100;
-  }
-
-  /// Get attendance count by schedule
-  Map<String, int> getAttendanceBySchedule() {
-    final Map<String, int> scheduleAttendance = {};
-    for (var record in attendanceRecords) {
-      if (record.isPresent) {
-        scheduleAttendance[record.scheduleId] = (scheduleAttendance[record.scheduleId] ?? 0) + 1;
-      }
-    }
-    return scheduleAttendance;
   }
 }

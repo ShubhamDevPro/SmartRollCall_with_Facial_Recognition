@@ -9,7 +9,7 @@ class BatchSchedule {
   final int iconCodePoint;
   final String dayOfWeek; // "Monday", "Tuesday", etc.
   final String startTime; // "16:00" (4:00 PM)
-  final String endTime;   // "17:00" (5:00 PM)
+  final String endTime; // "17:00" (5:00 PM)
   final bool isActive;
   final DateTime createdAt;
 
@@ -56,49 +56,6 @@ class BatchSchedule {
       'isActive': isActive,
       'createdAt': Timestamp.fromDate(createdAt),
     };
-  }
-
-  /// Check if this batch is currently scheduled based on current time
-  bool isCurrentlyScheduled() {
-    final now = DateTime.now();
-    final currentDay = _getDayName(now.weekday);
-    final currentTime = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
-    
-    return isActive && 
-           dayOfWeek == currentDay && 
-           currentTime.compareTo(startTime) >= 0 && 
-           currentTime.compareTo(endTime) <= 0;
-  }
-
-  /// Check if this batch is scheduled for today
-  bool isScheduledToday() {
-    final now = DateTime.now();
-    final currentDay = _getDayName(now.weekday);
-    return isActive && dayOfWeek == currentDay;
-  }
-
-  /// Get the formatted time range as a string
-  String getTimeRange() {
-    return "$startTime - $endTime";
-  }
-
-  /// Convert weekday number to day name
-  String _getDayName(int weekday) {
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    return days[weekday - 1];
-  }
-
-  /// Get current day name
-  static String getCurrentDayName() {
-    final now = DateTime.now();
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    return days[now.weekday - 1];
-  }
-
-  /// Get current time in HH:MM format
-  static String getCurrentTime() {
-    final now = DateTime.now();
-    return "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
   }
 
   /// Validate time format (HH:MM)

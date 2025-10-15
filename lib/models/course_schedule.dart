@@ -50,12 +50,4 @@ class CourseSchedule {
 
   /// Get time range string (for backward compatibility)
   String get timeRange => '$startTime - $endTime';
-
-  /// Check if this schedule matches a given DateTime
-  bool matchesDateTime(DateTime dateTime) {
-    final weekdayNames = [
-      '', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
-    ];
-    return weekdayNames[dateTime.weekday] == dayOfWeek;
-  }
 }

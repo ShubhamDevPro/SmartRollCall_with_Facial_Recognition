@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:smart_roll_call_flutter/screens/AttendanceScreen.dart';
+import 'package:smart_roll_call_flutter/screens/Professor/AttendanceScreen.dart';
 import 'package:smart_roll_call_flutter/screens/View-Edit%20History/AttendanceHistory.dart';
-import 'package:smart_roll_call_flutter/screens/CourseModal.dart';
-import 'package:smart_roll_call_flutter/screens/MultiScheduleCourseModal.dart';
-import 'package:smart_roll_call_flutter/screens/CourseDetailsScreen.dart';
+import 'package:smart_roll_call_flutter/screens/Professor/CourseModal.dart';
+import 'package:smart_roll_call_flutter/screens/Professor/MultiScheduleCourseModal.dart';
+import 'package:smart_roll_call_flutter/screens/Professor/CourseDetailsScreen.dart';
 import 'package:smart_roll_call_flutter/services/firestore_service.dart';
-import 'package:smart_roll_call_flutter/screens/settings_screen.dart';
-import 'package:smart_roll_call_flutter/screens/Attendance_Trends.dart';
+import 'package:smart_roll_call_flutter/screens/Professor/settings_screen.dart';
+import 'package:smart_roll_call_flutter/screens/Professor/Attendance_Trends.dart';
 import 'package:smart_roll_call_flutter/models/course_schedule.dart';
 
 // Main widget for the home page

@@ -66,7 +66,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     });
 
     try {
-      final schedules = await _firestoreService.getSchedulesForDate(widget.batchId, selectedDate);
+      final schedules = await _firestoreService.getSchedulesForDate(
+          widget.batchId, selectedDate);
       setState(() {
         availableSchedules = schedules;
         // Automatically select the first schedule if available
@@ -159,7 +160,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       // Show success message with schedule info
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text('Attendance saved for ${selectedSchedule!.displayString}!'),
+          content:
+              Text('Attendance saved for ${selectedSchedule!.displayString}!'),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
@@ -257,7 +259,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final absentCount = students.length - presentCount;
     final theme = Theme.of(context);
 
     return GestureDetector(
@@ -331,7 +332,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min, // Take minimum space needed
+                            mainAxisSize:
+                                MainAxisSize.min, // Take minimum space needed
                             children: [
                               const Icon(
                                 Icons.calendar_today,
@@ -339,12 +341,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                 size: 20,
                               ),
                               const SizedBox(width: 8),
-                              Flexible( // Make text flexible
+                              Flexible(
+                                // Make text flexible
                                 child: Text(
                                   selectedDate.day == DateTime.now().day &&
                                           selectedDate.month ==
                                               DateTime.now().month &&
-                                          selectedDate.year == DateTime.now().year
+                                          selectedDate.year ==
+                                              DateTime.now().year
                                       ? 'Today\'s Attendance'
                                       : '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
                                   style: const TextStyle(
@@ -352,7 +356,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                     fontSize: 16,
                                     fontWeight: FontWeight.w500,
                                   ),
-                                  overflow: TextOverflow.ellipsis, // Handle text overflow
+                                  overflow: TextOverflow
+                                      .ellipsis, // Handle text overflow
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -412,7 +417,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       if (availableSchedules.isNotEmpty) ...[
                         Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 16),
                           margin: const EdgeInsets.symmetric(vertical: 8),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.1),
@@ -444,15 +450,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                 child: DropdownButton<CourseSchedule>(
                                   value: selectedSchedule,
                                   isExpanded: true,
-                                  dropdownColor: theme.primaryColor.withOpacity(0.9),
+                                  dropdownColor:
+                                      theme.primaryColor.withOpacity(0.9),
                                   style: const TextStyle(color: Colors.white),
-                                  icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                                  icon: const Icon(Icons.arrow_drop_down,
+                                      color: Colors.white),
                                   items: availableSchedules.map((schedule) {
                                     return DropdownMenuItem<CourseSchedule>(
                                       value: schedule,
                                       child: Text(
                                         schedule.displayString,
-                                        style: const TextStyle(color: Colors.white),
+                                        style: const TextStyle(
+                                            color: Colors.white),
                                       ),
                                     );
                                   }).toList(),
@@ -469,7 +478,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ] else if (!isLoadingSchedules) ...[
                         Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 16),
                           margin: const EdgeInsets.symmetric(vertical: 8),
                           decoration: BoxDecoration(
                             color: Colors.orange.withOpacity(0.1),
@@ -726,8 +736,6 @@ class StudentCard extends StatefulWidget {
 class _StudentCardState extends State<StudentCard> {
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Card(
       elevation: 2,
       margin: const EdgeInsets.symmetric(vertical: 6.0),

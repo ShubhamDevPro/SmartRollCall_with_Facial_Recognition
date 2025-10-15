@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:smart_roll_call_flutter/models/course_schedule.dart';
 import 'package:smart_roll_call_flutter/services/firestore_service.dart';
-import 'package:smart_roll_call_flutter/screens/AttendanceScreen.dart';
+import 'package:smart_roll_call_flutter/screens/Professor/AttendanceScreen.dart';
 import 'package:smart_roll_call_flutter/screens/View-Edit%20History/AttendanceHistory.dart';
 
 class CourseDetailsScreen extends StatefulWidget {
@@ -37,7 +37,8 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
 
   void _loadSchedules() async {
     try {
-      final courseSchedules = await _firestoreService.getCourseSchedulesList(widget.batchId);
+      final courseSchedules =
+          await _firestoreService.getCourseSchedulesList(widget.batchId);
       setState(() {
         schedules = courseSchedules;
         _isLoading = false;
@@ -120,8 +121,8 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                   Text(
                     'Class Schedules',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   const SizedBox(height: 12),
 
@@ -133,8 +134,7 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                           child: Column(
                             children: [
                               Icon(Icons.schedule_outlined,
-                                   size: 48,
-                                   color: Colors.grey[400]),
+                                  size: 48, color: Colors.grey[400]),
                               const SizedBox(height: 12),
                               Text(
                                 'No schedules found',
@@ -158,7 +158,8 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                       ),
                     )
                   else
-                    ...schedules.map((schedule) => _buildScheduleCard(schedule)),
+                    ...schedules
+                        .map((schedule) => _buildScheduleCard(schedule)),
 
                   const SizedBox(height: 20),
 
@@ -166,8 +167,8 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                   Text(
                     'Actions',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   const SizedBox(height: 12),
 
@@ -187,15 +188,6 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                     color: Colors.green,
                     onTap: () => _navigateToHistory(),
                   ),
-                  const SizedBox(height: 12),
-
-                  _buildActionButton(
-                    icon: Icons.schedule_outlined,
-                    title: 'Manage Schedules',
-                    subtitle: 'Add, edit, or remove class schedules',
-                    color: Colors.orange,
-                    onTap: () => _manageSchedules(),
-                  ),
                 ],
               ),
             ),
@@ -206,7 +198,8 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
     // Get current time to check if class is active
     final now = DateTime.now();
     final currentDay = _getDayName(now.weekday);
-    final currentTime = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+    final currentTime =
+        "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
 
     final isToday = schedule.dayOfWeek == currentDay;
     final isCurrentClass = isToday &&
@@ -375,17 +368,16 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
     );
   }
 
-  void _manageSchedules() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Schedule management will be available in the next update'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
   String _getDayName(int weekday) {
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const days = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday'
+    ];
     return days[weekday - 1];
   }
 }
