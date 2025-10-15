@@ -238,20 +238,7 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             SizedBox(height: 12),
 
-                            // Forgot Password
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton(
-                                onPressed: () {
-                                  // Add forgot password functionality
-                                },
-                                child: Text(
-                                  'Forgot Password?',
-                                  style: TextStyle(color: Colors.blue.shade700),
-                                ),
-                              ),
-                            ),
-                            SizedBox(height: 24),
+                            
 
                             // Login button
                             SizedBox(

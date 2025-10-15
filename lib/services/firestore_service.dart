@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:smart_roll_call_flutter/models/batch_schedule.dart';
 import 'package:smart_roll_call_flutter/models/course_schedule.dart';
 import 'package:smart_roll_call_flutter/models/attendance_record.dart';
 
@@ -25,19 +24,6 @@ class FirestoreService {
         .doc(userId)
         .collection('batches')
         .orderBy('createdAt', descending: true)
-        .snapshots();
-  }
-
-  // Get schedules for a specific course/batch
-  Stream<QuerySnapshot> getCourseSchedules(String batchId) {
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('batches')
-        .doc(batchId)
-        .collection('schedules')
-        .orderBy('dayOfWeek')
-        .orderBy('startTime')
         .snapshots();
   }
 
@@ -82,77 +68,6 @@ class FirestoreService {
       return batchRef;
     } catch (e) {
       print('Error adding batch with schedules: $e');
-      rethrow;
-    }
-  }
-
-  // Add a single schedule to an existing course
-  Future<void> addScheduleToCourse(
-    String batchId,
-    String dayOfWeek,
-    String startTime,
-    String endTime,
-  ) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('batches')
-          .doc(batchId)
-          .collection('schedules')
-          .add({
-        'dayOfWeek': dayOfWeek,
-        'startTime': startTime,
-        'endTime': endTime,
-        'isActive': true,
-        'createdAt': Timestamp.now(),
-      });
-    } catch (e) {
-      print('Error adding schedule: $e');
-      rethrow;
-    }
-  }
-
-  // Update a specific schedule
-  Future<void> updateSchedule(
-    String batchId,
-    String scheduleId,
-    String dayOfWeek,
-    String startTime,
-    String endTime,
-  ) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('batches')
-          .doc(batchId)
-          .collection('schedules')
-          .doc(scheduleId)
-          .update({
-        'dayOfWeek': dayOfWeek,
-        'startTime': startTime,
-        'endTime': endTime,
-      });
-    } catch (e) {
-      print('Error updating schedule: $e');
-      rethrow;
-    }
-  }
-
-  // Delete a specific schedule
-  Future<void> deleteSchedule(String batchId, String scheduleId) async {
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('batches')
-          .doc(batchId)
-          .collection('schedules')
-          .doc(scheduleId)
-          .delete();
-    } catch (e) {
-      print('Error deleting schedule: $e');
       rethrow;
     }
   }
@@ -269,21 +184,6 @@ class FirestoreService {
       print('Error saving attendance: $e');
       rethrow;
     }
-  }
-
-  // Add method to get attendance for a specific date
-  Stream<QuerySnapshot> getAttendanceForDate(
-      String batchId, String studentId, DateTime date) {
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('batches')
-        .doc(batchId)
-        .collection('students')
-        .doc(studentId)
-        .collection('attendance')
-        .where('date', isEqualTo: Timestamp.fromDate(date))
-        .snapshots();
   }
 
   // FIXED: Get attendance for all students on a specific date, supporting multiple schedules per day
@@ -470,102 +370,6 @@ class FirestoreService {
     }
   }
 
-  // Add this new method to get all attendance dates and data
-  Future<Map<String, dynamic>> getAllAttendanceData() async {
-    try {
-      Set<String> allDates = {};
-      Map<String, Map<String, bool>> studentAttendance = {};
-      Map<String, Map<String, String>> studentInfo = {};
-
-      // Get all batches
-      final batchesSnapshot = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('batches')
-          .get();
-
-      // For each batch
-      for (var batch in batchesSnapshot.docs) {
-        // Get all students in the batch
-        final studentsSnapshot =
-            await batch.reference.collection('students').get();
-
-        // For each student
-        for (var student in studentsSnapshot.docs) {
-          final enrollNumber = student.data()['enrollNumber'] as String;
-
-          // Store student info
-          studentInfo[enrollNumber] = {
-            'name': student.data()['name'] as String,
-            'enrollNumber': enrollNumber,
-          };
-
-          // Get all attendance records for this student
-          final attendanceSnapshot =
-              await student.reference.collection('attendance').get();
-
-          // Store attendance data and collect dates
-          Map<String, bool> dates = {};
-          for (var attendance in attendanceSnapshot.docs) {
-            final date =
-                attendance.id; // Using the document ID which is the date string
-            dates[date] = attendance.data()['isPresent'] as bool;
-            allDates.add(date);
-          }
-          studentAttendance[enrollNumber] = dates;
-        }
-      }
-
-      return {
-        'dates': allDates.toList()..sort(),
-        'studentAttendance': studentAttendance,
-        'studentInfo': studentInfo,
-      };
-    } catch (e) {
-      print('Error getting all attendance data: $e');
-      rethrow;
-    }
-  }
-
-  Future<Map<String, dynamic>> getAllAttendanceDataUntilDate(
-    DateTime endDate,
-    String? batchId,
-  ) async {
-    try {
-      final Map<String, dynamic> studentAttendance = {};
-
-      // Get all attendance records up to the selected date
-      final QuerySnapshot attendanceSnapshot = await _firestore
-          .collection('attendance')
-          .where('batchId', isEqualTo: batchId)
-          .where('date', isLessThanOrEqualTo: endDate)
-          .get();
-
-      // Process attendance records
-      for (var doc in attendanceSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final date = (data['date'] as Timestamp).toDate();
-        final dateStr = '${date.year}-${date.month}-${date.day}';
-
-        for (var student in data['students']) {
-          final enrollNo = student['enrollNumber'];
-          if (!studentAttendance.containsKey(enrollNo)) {
-            studentAttendance[enrollNo] = {
-              'name': student['name'],
-              'attendance': {}
-            };
-          }
-          studentAttendance[enrollNo]['attendance'][dateStr] =
-              student['isPresent'];
-        }
-      }
-
-      return studentAttendance;
-    } catch (e) {
-      throw Exception('Failed to fetch attendance data: $e');
-    }
-  }
-
   Future<List<Map<String, dynamic>>> getAttendanceHistory(
       String batchId) async {
     try {
@@ -646,29 +450,6 @@ class FirestoreService {
     }
   }
 
-  /// Get all batches scheduled for today
-  Future<List<BatchSchedule>> getTodaysBatches() async {
-    try {
-      final currentDay = _getDayName(DateTime.now().weekday);
-
-      final batchesSnapshot = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('batches')
-          .where('dayOfWeek', isEqualTo: currentDay)
-          .where('isActive', isEqualTo: true)
-          .orderBy('startTime')
-          .get();
-
-      return batchesSnapshot.docs
-          .map((doc) => BatchSchedule.fromFirestore(doc))
-          .toList();
-    } catch (e) {
-      print('Error getting today\'s batches: $e');
-      return [];
-    }
-  }
-
   /// Get student by MAC address in currently scheduled batch only
   Future<Map<String, dynamic>?> getStudentByMacAddressInCurrentBatch(
       String macAddress) async {
@@ -704,84 +485,6 @@ class FirestoreService {
       return null;
     } catch (e) {
       print('Error finding student by MAC in current batch: $e');
-      return null;
-    }
-  }
-
-  /// Mark attendance via ESP32 for currently scheduled batch only
-  Future<bool> markAttendanceByMacAddressCurrentBatch(
-      String macAddress, DateTime date) async {
-    try {
-      // Find student in currently scheduled batch
-      final studentData =
-          await getStudentByMacAddressInCurrentBatch(macAddress);
-      if (studentData == null) {
-        print(
-            'No student found with MAC address: $macAddress in current batch');
-        return false;
-      }
-
-      final dateStr =
-          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-
-      final studentRef = _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('batches')
-          .doc(studentData['batchId'])
-          .collection('students')
-          .doc(studentData['studentId']);
-
-      final attendanceRef = studentRef.collection('attendance').doc(dateStr);
-      final existingAttendance = await attendanceRef.get();
-
-      if (existingAttendance.exists) {
-        print(
-            'Attendance already marked for ${studentData['name']} on $dateStr in batch ${studentData['batchId']}');
-        return true;
-      }
-
-      // Get current class time for context
-      final classTime = await _getCurrentClassTime(studentData['batchId']);
-
-      // Mark attendance with batch context
-      await attendanceRef.set({
-        'date': Timestamp.fromDate(date),
-        'isPresent': true,
-        'markedBy': 'ESP32',
-        'markedAt': Timestamp.now(),
-        'macAddress': macAddress.toUpperCase(),
-        'batchId': studentData['batchId'],
-        'classTime': classTime,
-        'markedDuringClass':
-            true, // Flag to indicate this was marked during actual class time
-      });
-
-      print(
-          '✅ Attendance marked for ${studentData['name']} (${studentData['enrollNumber']}) in batch ${studentData['batchId']} via ESP32');
-      return true;
-    } catch (e) {
-      print('Error marking attendance by MAC address: $e');
-      return false;
-    }
-  }
-
-  /// Get current class time information for a batch
-  Future<String?> _getCurrentClassTime(String batchId) async {
-    try {
-      final batchDoc = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('batches')
-          .doc(batchId)
-          .get();
-
-      if (batchDoc.exists) {
-        final data = batchDoc.data()!;
-        return "${data['startTime']}-${data['endTime']}";
-      }
-      return null;
-    } catch (e) {
       return null;
     }
   }
@@ -1147,101 +850,6 @@ class FirestoreService {
       return records;
     } catch (e) {
       print('Error getting student attendance with schedules: $e');
-      return [];
-    }
-  }
-
-  /// Get attendance summary for a student showing which specific classes they attended
-  Future<StudentAttendanceSummary> getStudentAttendanceSummary(
-    String studentId,
-    String batchId,
-  ) async {
-    try {
-      // Get student info
-      final studentDoc = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('batches')
-          .doc(batchId)
-          .collection('students')
-          .doc(studentId)
-          .get();
-
-      if (!studentDoc.exists) {
-        throw 'Student not found';
-      }
-
-      final studentData = studentDoc.data()!;
-
-      // Get attendance records
-      final attendanceRecords =
-          await getStudentAttendanceWithSchedules(studentId, batchId);
-
-      return StudentAttendanceSummary(
-        studentId: studentId,
-        studentName: studentData['name'] ?? '',
-        enrollNumber: studentData['enrollNumber'] ?? '',
-        attendanceRecords: attendanceRecords,
-      );
-    } catch (e) {
-      print('Error getting student attendance summary: $e');
-      rethrow;
-    }
-  }
-
-  /// Get attendance records for a specific date and schedule
-  Future<List<Map<String, dynamic>>> getAttendanceForScheduleAndDate(
-    String batchId,
-    String scheduleId,
-    DateTime date,
-  ) async {
-    try {
-      // FIXED: Use fewer where clauses and filter in memory
-      final snapshot = await _firestore
-          .collection('attendance_records')
-          .where('batchId', isEqualTo: batchId)
-          .where('scheduleId', isEqualTo: scheduleId)
-          .get();
-
-      // Filter by date in memory
-      final dateStart = DateTime(date.year, date.month, date.day);
-      final dateEnd = DateTime(date.year, date.month, date.day, 23, 59, 59);
-
-      final List<Map<String, dynamic>> attendanceList = [];
-
-      for (var doc in snapshot.docs) {
-        final record = AttendanceRecord.fromFirestore(doc);
-
-        // Skip if date doesn't match
-        if (record.date.isBefore(dateStart) || record.date.isAfter(dateEnd)) {
-          continue;
-        }
-
-        // Get student info
-        final studentDoc = await _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('batches')
-            .doc(batchId)
-            .collection('students')
-            .doc(record.studentId)
-            .get();
-
-        if (studentDoc.exists) {
-          final studentData = studentDoc.data()!;
-          attendanceList.add({
-            'name': studentData['name'],
-            'enrollNumber': studentData['enrollNumber'],
-            'isPresent': record.isPresent,
-            'markedAt': record.markedAt,
-            'markedBy': record.markedBy,
-          });
-        }
-      }
-
-      return attendanceList;
-    } catch (e) {
-      print('Error getting attendance for schedule and date: $e');
       return [];
     }
   }
