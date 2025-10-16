@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../auth/auth_page.dart';
 import '../../services/optimized_student_attendance_service.dart';
 import 'package:intl/intl.dart';
+import 'face_recognition_prompt.dart';
 
 /// Screen to display student's own attendance using optimized flat database structure
 class StudentAttendanceViewScreen extends StatefulWidget {
@@ -30,15 +31,44 @@ class _StudentAttendanceViewScreenState
   int _presentCount = 0;
   double _attendancePercentage = 0.0;
   Map<String, Map<String, dynamic>> _courseStats = {};
-  
+
   // Use the new optimized service (10-20x faster!)
-  final OptimizedStudentAttendanceService _attendanceService = 
+  final OptimizedStudentAttendanceService _attendanceService =
       OptimizedStudentAttendanceService();
+
+  // Face verification listener
+  final FaceVerificationListener _verificationListener =
+      FaceVerificationListener();
 
   @override
   void initState() {
     super.initState();
     _loadAttendanceData();
+    _startVerificationListener();
+  }
+
+  @override
+  void dispose() {
+    _verificationListener.stopListening();
+    super.dispose();
+  }
+
+  /// Start listening for pending face verifications
+  void _startVerificationListener() {
+    _verificationListener.startListening(
+      enrollmentNumber: widget.enrollmentNumber,
+      onVerificationReceived: (verificationData) {
+        // Show face verification prompt modal
+        showFaceVerificationPrompt(
+          context,
+          verificationData,
+          () {
+            // Refresh attendance data after successful verification
+            _loadAttendanceData(forceRefresh: true);
+          },
+        );
+      },
+    );
   }
 
   /// Load attendance data using the optimized flat collection
@@ -50,37 +80,38 @@ class _StudentAttendanceViewScreenState
 
     try {
       print('🎓 Loading attendance for enrollment: ${widget.enrollmentNumber}');
-      
+
       // Use the new optimized service - single query, super fast!
       final attendanceRecords = await _attendanceService.getStudentAttendance(
         widget.enrollmentNumber,
         forceRefresh: forceRefresh,
       );
-      
+
       if (attendanceRecords.isEmpty) {
         print('❌ No attendance records found');
         setState(() {
           _isLoading = false;
         });
-        
+
         // Show helpful message to user
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('No attendance records found. Your professor needs to mark attendance first.'),
+              content: Text(
+                  'No attendance records found. Your professor needs to mark attendance first.'),
               duration: Duration(seconds: 3),
             ),
           );
         }
         return;
       }
-      
+
       // Process the records
       final Map<String, Map<String, dynamic>> courseStatsTemp = {};
-      
+
       for (var record in attendanceRecords) {
         final courseKey = '${record['courseName']}-${record['professorName']}';
-        
+
         if (!courseStatsTemp.containsKey(courseKey)) {
           courseStatsTemp[courseKey] = {
             'total': 0,
@@ -89,32 +120,33 @@ class _StudentAttendanceViewScreenState
             'courseName': record['courseName'],
           };
         }
-        
-        courseStatsTemp[courseKey]!['total'] = 
+
+        courseStatsTemp[courseKey]!['total'] =
             (courseStatsTemp[courseKey]!['total'] as int) + 1;
-        
+
         if (record['isPresent'] == true) {
-          courseStatsTemp[courseKey]!['present'] = 
+          courseStatsTemp[courseKey]!['present'] =
               (courseStatsTemp[courseKey]!['present'] as int) + 1;
         }
       }
-      
+
       // Sort by date (already sorted from service, but just in case)
-      attendanceRecords.sort((a, b) => 
-        (b['date'] as DateTime).compareTo(a['date'] as DateTime)
-      );
-      
+      attendanceRecords.sort(
+          (a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+
       // Calculate statistics
       final totalClasses = attendanceRecords.length;
-      final presentCount = attendanceRecords.where((r) => r['isPresent'] == true).length;
-      final percentage = totalClasses > 0 ? (presentCount / totalClasses) * 100 : 0.0;
-      
+      final presentCount =
+          attendanceRecords.where((r) => r['isPresent'] == true).length;
+      final percentage =
+          totalClasses > 0 ? (presentCount / totalClasses) * 100 : 0.0;
+
       print('📊 Statistics:');
       print('   Total classes: $totalClasses');
       print('   Present: $presentCount');
       print('   Percentage: ${percentage.toStringAsFixed(1)}%');
       print('   Courses: ${courseStatsTemp.length}');
-      
+
       setState(() {
         _attendanceRecords = attendanceRecords;
         _totalClasses = totalClasses;
@@ -123,12 +155,11 @@ class _StudentAttendanceViewScreenState
         _courseStats = courseStatsTemp;
         _isLoading = false;
       });
-      
+
       print('✅ Attendance data loaded successfully!');
-      
     } catch (e) {
       print('❌ Error loading attendance: $e');
-      
+
       // Show error to user with retry option
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -144,7 +175,7 @@ class _StudentAttendanceViewScreenState
           ),
         );
       }
-      
+
       setState(() {
         _isLoading = false;
       });
@@ -233,7 +264,8 @@ class _StudentAttendanceViewScreenState
                       ),
                       const SizedBox(height: 20),
                       ElevatedButton.icon(
-                        onPressed: () => _loadAttendanceData(forceRefresh: true),
+                        onPressed: () =>
+                            _loadAttendanceData(forceRefresh: true),
                         icon: const Icon(Icons.refresh),
                         label: const Text('Refresh'),
                         style: ElevatedButton.styleFrom(
