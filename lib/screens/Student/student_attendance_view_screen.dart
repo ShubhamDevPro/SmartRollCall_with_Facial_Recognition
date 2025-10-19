@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../auth/auth_page.dart';
 import '../../services/optimized_student_attendance_service.dart';
+import '../../services/face_enrollment_service.dart';
 import 'package:intl/intl.dart';
 import 'face_recognition_prompt.dart';
+import 'face_enrollment_screen.dart';
 
 /// Screen to display student's own attendance using optimized flat database structure
 class StudentAttendanceViewScreen extends StatefulWidget {
@@ -31,6 +33,7 @@ class _StudentAttendanceViewScreenState
   int _presentCount = 0;
   double _attendancePercentage = 0.0;
   Map<String, Map<String, dynamic>> _courseStats = {};
+  bool _hasFaceEnrolled = false;
 
   // Use the new optimized service (10-20x faster!)
   final OptimizedStudentAttendanceService _attendanceService =
@@ -40,17 +43,35 @@ class _StudentAttendanceViewScreenState
   final FaceVerificationListener _verificationListener =
       FaceVerificationListener();
 
+  // Face enrollment service
+  final FaceEnrollmentService _enrollmentService = FaceEnrollmentService();
+
   @override
   void initState() {
     super.initState();
     _loadAttendanceData();
     _startVerificationListener();
+    _checkFaceEnrollment();
   }
 
   @override
   void dispose() {
     _verificationListener.stopListening();
     super.dispose();
+  }
+
+  /// Check if student has face enrolled
+  Future<void> _checkFaceEnrollment() async {
+    try {
+      final hasEnrolled = await _enrollmentService.hasFaceEnrolled(
+        widget.enrollmentNumber,
+      );
+      setState(() {
+        _hasFaceEnrolled = hasEnrolled;
+      });
+    } catch (e) {
+      print('❌ Error checking face enrollment: $e');
+    }
   }
 
   /// Start listening for pending face verifications
@@ -69,6 +90,24 @@ class _StudentAttendanceViewScreenState
         );
       },
     );
+  }
+
+  /// Navigate to face enrollment screen
+  Future<void> _navigateToEnrollment() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FaceEnrollmentScreen(
+          enrollmentNumber: widget.enrollmentNumber,
+          studentName: widget.studentName,
+        ),
+      ),
+    );
+
+    // If enrollment was successful, refresh the face enrollment status
+    if (result == true) {
+      await _checkFaceEnrollment();
+    }
   }
 
   /// Load attendance data using the optimized flat collection
@@ -281,6 +320,75 @@ class _StudentAttendanceViewScreenState
                   child: ListView(
                     padding: const EdgeInsets.all(16.0),
                     children: [
+                      // Face Enrollment Card (show if not enrolled)
+                      if (!_hasFaceEnrolled)
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.orange.shade400,
+                                  Colors.deepOrange.shade600,
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            padding: const EdgeInsets.all(20.0),
+                            child: Column(
+                              children: [
+                                const Icon(
+                                  Icons.face_outlined,
+                                  size: 60,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'Face Not Enrolled',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Enroll your face to enable automatic attendance verification',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                ElevatedButton.icon(
+                                  onPressed: _navigateToEnrollment,
+                                  icon: const Icon(Icons.camera_alt),
+                                  label: const Text('Enroll Face Now'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    foregroundColor: Colors.deepOrange,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(25),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                      if (!_hasFaceEnrolled) const SizedBox(height: 20),
+
                       // Overall Stats Card
                       Card(
                         elevation: 4,

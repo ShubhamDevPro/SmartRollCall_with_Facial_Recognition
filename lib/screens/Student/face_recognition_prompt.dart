@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter_exif_rotation/flutter_exif_rotation.dart';
 import 'dart:async';
+import '../../services/face_enrollment_service.dart';
 
 /// Service to handle real-time pending verification listening
 class FaceVerificationListener {
@@ -59,18 +62,25 @@ class _FaceVerificationPromptState extends State<FaceVerificationPrompt> {
   bool _isVerifying = false;
   int _timeRemaining = 300; // 5 minutes in seconds
   Timer? _countdownTimer;
+  final FaceEnrollmentService _faceService = FaceEnrollmentService();
 
   @override
   void initState() {
     super.initState();
     _startCountdown();
     _checkExpiration();
+    _initializeFaceSDK();
   }
 
   @override
   void dispose() {
     _countdownTimer?.cancel();
     super.dispose();
+  }
+
+  /// Initialize FaceSDK
+  Future<void> _initializeFaceSDK() async {
+    await _faceService.initialize();
   }
 
   void _startCountdown() {
@@ -129,39 +139,213 @@ class _FaceVerificationPromptState extends State<FaceVerificationPrompt> {
     });
 
     try {
-      final verificationId =
-          widget.verificationData['verificationId'] as String;
+      final enrollmentNumber =
+          widget.verificationData['studentEnrollment'] as String;
 
-      // TODO: In the future, add face recognition logic here
-      // For now, we'll just simulate verification and mark attendance
+      // Try to initialize FaceSDK
+      final sdkInitialized = await _faceService.initialize();
 
-      print('✅ Verifying and marking attendance for: $verificationId');
-
-      // Move data from pending_verifications to attendance_records
-      await _moveToAttendanceRecords(verificationId);
-
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Attendance marked successfully!',
-                    style: TextStyle(fontSize: 16),
+      if (!sdkInitialized) {
+        // SDK not available (license expired), show option for manual verification
+        if (mounted) {
+          final shouldContinue = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.orange),
+                  SizedBox(width: 12),
+                  Text('Face Recognition Unavailable'),
+                ],
+              ),
+              content: const Text(
+                  'Face recognition is temporarily unavailable (license expired).\n\n'
+                  'Would you like to mark attendance manually without face verification?\n\n'
+                  'Note: Contact admin to enable face verification:\n'
+                  '📧 contact@kby-ai.com'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
                   ),
+                  child: const Text('Mark Manually'),
                 ),
               ],
             ),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
+          );
 
-        widget.onVerificationComplete();
+          if (shouldContinue != true) {
+            setState(() {
+              _isVerifying = false;
+            });
+            return;
+          }
+
+          // Proceed with manual verification (no face recognition)
+          print(
+              '✅ Manual verification (SDK unavailable) for: $enrollmentNumber');
+
+          final verificationId =
+              widget.verificationData['verificationId'] as String;
+          await _moveToAttendanceRecords(verificationId);
+
+          if (mounted) {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.white),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Attendance marked successfully! (Manual verification)',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 3),
+              ),
+            );
+
+            widget.onVerificationComplete();
+          }
+          return;
+        }
+      }
+
+      // SDK is available, proceed with face verification
+      // Check if student has face enrolled
+      final hasEnrolled = await _faceService.hasFaceEnrolled(enrollmentNumber);
+
+      if (!hasEnrolled) {
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Please enroll your face first before using face verification.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Capture face image for verification
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.front,
+        imageQuality: 90,
+      );
+
+      if (image == null) {
+        setState(() {
+          _isVerifying = false;
+        });
+        return;
+      }
+
+      // Rotate image if needed
+      final rotatedImage =
+          await FlutterExifRotation.rotateImage(path: image.path);
+
+      print('✅ Verifying face for: $enrollmentNumber');
+
+      // Verify face against stored embedding
+      final verificationResult = await _faceService.verifyFace(
+        enrollmentNumber: enrollmentNumber,
+        imagePath: rotatedImage.path,
+      );
+
+      if (verificationResult == null) {
+        if (mounted) {
+          setState(() {
+            _isVerifying = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to verify face. Please try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final similarity = verificationResult['similarity'] as double;
+      final liveness = verificationResult['liveness'] as double;
+
+      // Thresholds for verification
+      const double similarityThreshold = 0.8; // 80% similarity required
+      const double livenessThreshold = 0.7; // 70% liveness required
+
+      print('📊 Similarity: $similarity, Liveness: $liveness');
+
+      if (similarity >= similarityThreshold && liveness >= livenessThreshold) {
+        // Face verified successfully, mark attendance
+        final verificationId =
+            widget.verificationData['verificationId'] as String;
+        await _moveToAttendanceRecords(verificationId);
+
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Face verified! Attendance marked successfully!',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+
+          widget.onVerificationComplete();
+        }
+      } else {
+        // Face verification failed
+        if (mounted) {
+          setState(() {
+            _isVerifying = false;
+          });
+
+          String message = 'Face verification failed. ';
+          if (similarity < similarityThreshold) {
+            message += 'Face does not match. ';
+          }
+          if (liveness < livenessThreshold) {
+            message += 'Please use a live camera feed. ';
+          }
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
       }
     } catch (e) {
       print('❌ Error verifying attendance: $e');
@@ -173,7 +357,7 @@ class _FaceVerificationPromptState extends State<FaceVerificationPrompt> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error marking attendance: ${e.toString()}'),
+            content: Text('Error verifying face: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );

@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:317216724501:android:38ec0a8c918137be06601c",
         "android_client_info": {
-          "package_name": "com.example.smart_roll_call_flutter"
+          "package_name": "com.kbyai.facerecognition_flutter"
         }
       },
       "oauth_client": [],

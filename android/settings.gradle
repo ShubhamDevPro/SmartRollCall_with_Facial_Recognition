@@ -26,3 +26,10 @@ plugins {
 }
 
 include ":app"
+
+// Include FaceSDK library modules
+include ':libfacesdk'
+project(':libfacesdk').projectDir = new File(settingsDir, '../FaceRecognition/android/libfacesdk')
+
+include ':libfotoapparat'
+project(':libfotoapparat').projectDir = new File(settingsDir, '../FaceRecognition/android/libfotoapparat')
