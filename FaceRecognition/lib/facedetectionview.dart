@@ -31,10 +31,7 @@ class FaceRecognitionViewState extends State<FaceRecognitionView> {
   String _identifiedYaw = "";
   String _identifiedRoll = "";
   String _identifiedPitch = "";
-  // ignore: prefer_typing_uninitialized_variables
-  var _identifiedFace;
-  // ignore: prefer_typing_uninitialized_variables
-  var _enrolledFace;
+  // No longer storing face images, only using embeddings
   final _facesdkPlugin = FacesdkPlugin();
   FaceDetectionViewController? faceDetectionViewController;
 
@@ -85,8 +82,7 @@ class FaceRecognitionViewState extends State<FaceRecognitionView> {
     double maxYaw = -1;
     double maxRoll = -1;
     double maxPitch = -1;
-    // ignore: prefer_typing_uninitialized_variables
-    var enrolledFace, identifedFace;
+    // No longer using face images, only embeddings
     if (faces.length > 0) {
       var face = faces[0];
       for (var person in widget.personList) {
@@ -100,8 +96,7 @@ class FaceRecognitionViewState extends State<FaceRecognitionView> {
           maxYaw = face['yaw'];
           maxRoll = face['roll'];
           maxPitch = face['pitch'];
-          identifedFace = face['faceJpg'];
-          enrolledFace = person.faceJpg;
+          // No longer storing face images, only using embeddings
         }
       }
 
@@ -121,8 +116,7 @@ class FaceRecognitionViewState extends State<FaceRecognitionView> {
         _identifiedYaw = maxYaw.toString();
         _identifiedRoll = maxRoll.toString();
         _identifiedPitch = maxPitch.toString();
-        _enrolledFace = enrolledFace;
-        _identifiedFace = identifedFace;
+        // No longer storing face images
       });
       if (recognized) {
         faceDetectionViewController?.stopCamera();
@@ -171,52 +165,15 @@ class FaceRecognitionViewState extends State<FaceRecognitionView> {
                         const SizedBox(
                           height: 10,
                         ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: <Widget>[
-                            _enrolledFace != null
-                                ? Column(
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                        child: Image.memory(
-                                          _enrolledFace,
-                                          width: 160,
-                                          height: 160,
-                                        ),
-                                      ),
-                                      const SizedBox(
-                                        height: 5,
-                                      ),
-                                      const Text('Enrolled')
-                                    ],
-                                  )
-                                : const SizedBox(
-                                    height: 1,
-                                  ),
-                            _identifiedFace != null
-                                ? Column(
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                        child: Image.memory(
-                                          _identifiedFace,
-                                          width: 160,
-                                          height: 160,
-                                        ),
-                                      ),
-                                      const SizedBox(
-                                        height: 5,
-                                      ),
-                                      const Text('Identified')
-                                    ],
-                                  )
-                                : const SizedBox(
-                                    height: 1,
-                                  )
-                          ],
+                        // Face images no longer displayed - using embeddings only
+                        const Center(
+                          child: Text(
+                            'Face recognition uses secure embeddings only',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
                         ),
                         const SizedBox(
                           height: 10,

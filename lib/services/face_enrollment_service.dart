@@ -86,7 +86,7 @@ class FaceEnrollmentService {
     }
   }
 
-  /// Extract face from image and return face data
+  /// Extract face from image and return face data (templates and liveness only)
   Future<Map<String, dynamic>?> extractFaceFromImage(String imagePath) async {
     try {
       if (!_isInitialized) {
@@ -113,8 +113,8 @@ class FaceEnrollmentService {
       final face = faces[0];
       print('✅ Face extracted successfully');
 
+      // Return only templates (embeddings) and liveness, no face image
       return {
-        'faceJpg': face['faceJpg'] as Uint8List,
         'templates': face['templates'] as Uint8List,
         'liveness': face['liveness'] ?? 0.0,
       };
@@ -136,10 +136,9 @@ class FaceEnrollmentService {
         return false;
       }
 
-      // Store in Firestore
+      // Store only templates (embeddings) in Firestore
       final success = await _profileService.storeFaceEmbedding(
         enrollmentNumber: enrollmentNumber,
-        faceJpg: faceData['faceJpg'],
         templates: faceData['templates'],
       );
 
@@ -163,7 +162,7 @@ class FaceEnrollmentService {
         }
       }
 
-      // Get stored embedding
+      // Get stored embedding (templates only)
       final storedEmbedding =
           await _profileService.getFaceEmbedding(enrollmentNumber);
       if (storedEmbedding == null) {
@@ -177,10 +176,10 @@ class FaceEnrollmentService {
         return null;
       }
 
-      // Calculate similarity
+      // Calculate similarity using only embeddings
       final similarity = await _facesdkPlugin.similarityCalculation(
         faceData['templates'],
-        storedEmbedding['templates']!,
+        storedEmbedding,
       );
 
       if (similarity == null) {
@@ -191,11 +190,10 @@ class FaceEnrollmentService {
       print('📊 Similarity score: $similarity');
       print('📊 Liveness score: ${faceData['liveness']}');
 
+      // Return only similarity and liveness, no face images
       return {
         'similarity': similarity,
         'liveness': faceData['liveness'],
-        'faceJpg': faceData['faceJpg'],
-        'enrolledFaceJpg': storedEmbedding['faceJpg'],
       };
     } catch (e) {
       print('❌ Error verifying face: $e');

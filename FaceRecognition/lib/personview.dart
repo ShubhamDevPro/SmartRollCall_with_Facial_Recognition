@@ -25,20 +25,16 @@ class _PersonViewState extends State<PersonView> {
         itemCount: widget.personList.length,
         itemBuilder: (BuildContext context, int index) {
           return SizedBox(
-              height: 75,
+              height: 60,
               child: Card(
                   child: Row(
                 children: [
                   const SizedBox(
                     width: 16,
                   ),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(28.0),
-                    child: Image.memory(
-                      widget.personList[index].faceJpg,
-                      width: 56,
-                      height: 56,
-                    ),
+                  const Icon(
+                    Icons.person,
+                    size: 40,
                   ),
                   const SizedBox(
                     width: 16,

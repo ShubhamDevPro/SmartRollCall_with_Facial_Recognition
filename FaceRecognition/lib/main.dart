@@ -144,12 +144,12 @@ class MyHomePageState extends State<MyHomePage> {
       onCreate: (db, version) {
         // Run the CREATE TABLE statement on the database.
         return db.execute(
-          'CREATE TABLE person(name text, faceJpg blob, templates blob)',
+          'CREATE TABLE person(name text, templates blob)',
         );
       },
       // Set the version. This executes the onCreate function and provides a
       // path to perform database upgrades and downgrades.
-      version: 1,
+      version: 2,
     );
 
     return database;
@@ -242,7 +242,6 @@ class MyHomePageState extends State<MyHomePage> {
             10000 + Random().nextInt(10000); // from 0 upto 99 included
         Person person = Person(
             name: 'Person' + randomNumber.toString(),
-            faceJpg: face['faceJpg'],
             templates: face['templates']);
         insertPerson(person);
       }

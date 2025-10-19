@@ -65,7 +65,6 @@ class StudentProfileService {
   /// Store face embedding for a student
   Future<bool> storeFaceEmbedding({
     required String enrollmentNumber,
-    required Uint8List faceJpg,
     required Uint8List templates,
   }) async {
     try {
@@ -78,8 +77,8 @@ class StudentProfileService {
       final studentId = profile['id'] as String;
 
       // Convert Uint8List to List<int> for Firestore storage
+      // Only store templates (embeddings), not the face image
       await _firestore.collection('student_profiles').doc(studentId).update({
-        'faceJpg': faceJpg.toList(),
         'faceTemplates': templates.toList(),
         'faceEnrolledAt': FieldValue.serverTimestamp(),
       });
@@ -93,19 +92,14 @@ class StudentProfileService {
   }
 
   /// Get face embedding for a student
-  Future<Map<String, Uint8List>?> getFaceEmbedding(
-      String enrollmentNumber) async {
+  Future<Uint8List?> getFaceEmbedding(String enrollmentNumber) async {
     try {
       final profile = await getStudentProfileByEnrollment(enrollmentNumber);
       if (profile == null) return null;
 
       if (profile.containsKey('faceTemplates') &&
           profile['faceTemplates'] != null) {
-        return {
-          'faceJpg': Uint8List.fromList(List<int>.from(profile['faceJpg'])),
-          'templates':
-              Uint8List.fromList(List<int>.from(profile['faceTemplates'])),
-        };
+        return Uint8List.fromList(List<int>.from(profile['faceTemplates']));
       }
       return null;
     } catch (e) {
