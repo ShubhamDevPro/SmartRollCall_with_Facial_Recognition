@@ -1,3 +1,4 @@
 {
-  "java.configuration.updateBuildConfiguration": "automatic"
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "cmake.sourceDirectory": "/Users/shubhamdev/Developer/karan/SmartRollCall_with_Facial_Recognition/linux"
 }

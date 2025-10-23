@@ -945,4 +945,214 @@ class FirestoreService {
       return false;
     }
   }
+
+  /// Get attendance trends data for professor's batches
+  /// Returns aggregated statistics for visualization
+  Future<Map<String, dynamic>> getAttendanceTrendsData({
+    required DateTime startDate,
+    required DateTime endDate,
+    String? batchId,
+  }) async {
+    try {
+      // Query attendance records for this professor
+      Query query = _firestore
+          .collection('attendance_records')
+          .where('professorId', isEqualTo: userId);
+
+      if (batchId != null) {
+        query = query.where('batchId', isEqualTo: batchId);
+      }
+
+      final snapshot = await query.get();
+
+      // Filter by date range in memory
+      final filteredRecords = snapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data == null) return false;
+
+        final recordDate = (data['date'] as Timestamp?)?.toDate();
+        if (recordDate == null) return false;
+
+        return recordDate
+                .isAfter(startDate.subtract(const Duration(seconds: 1))) &&
+            recordDate.isBefore(endDate.add(const Duration(seconds: 1)));
+      }).toList();
+
+      // Overall statistics
+      int totalRecords = filteredRecords.length;
+      int presentCount = filteredRecords.where((doc) {
+        final data = doc.data() as Map<String, dynamic>?;
+        return data?['isPresent'] == true;
+      }).length;
+      int absentCount = totalRecords - presentCount;
+
+      // Weekly trends (group by week)
+      Map<String, Map<String, int>> weeklyData = {};
+      for (var doc in filteredRecords) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data == null) continue;
+
+        final recordDate = (data['date'] as Timestamp?)?.toDate();
+        if (recordDate == null) continue;
+
+        // Get week identifier (e.g., "Week 1", "Week 2")
+        final weekNumber = ((recordDate.difference(startDate).inDays) ~/ 7) + 1;
+        final weekKey = 'Week $weekNumber';
+
+        if (!weeklyData.containsKey(weekKey)) {
+          weeklyData[weekKey] = {'present': 0, 'absent': 0, 'total': 0};
+        }
+
+        weeklyData[weekKey]!['total'] = weeklyData[weekKey]!['total']! + 1;
+        if (data['isPresent'] == true) {
+          weeklyData[weekKey]!['present'] =
+              weeklyData[weekKey]!['present']! + 1;
+        } else {
+          weeklyData[weekKey]!['absent'] = weeklyData[weekKey]!['absent']! + 1;
+        }
+      }
+
+      // Calculate weekly percentages
+      List<Map<String, dynamic>> weeklyTrends = [];
+      weeklyData.forEach((week, counts) {
+        double percentage = counts['total']! > 0
+            ? (counts['present']! / counts['total']!) * 100
+            : 0.0;
+        weeklyTrends.add({
+          'week': week,
+          'percentage': percentage.roundToDouble(),
+          'present': counts['present'],
+          'absent': counts['absent'],
+          'total': counts['total'],
+        });
+      });
+
+      // Sort by week number
+      weeklyTrends.sort((a, b) {
+        int weekA = int.parse(a['week'].toString().split(' ')[1]);
+        int weekB = int.parse(b['week'].toString().split(' ')[1]);
+        return weekA.compareTo(weekB);
+      });
+
+      // Batch-wise statistics (if no specific batch selected)
+      List<Map<String, dynamic>> batchStats = [];
+      if (batchId == null) {
+        Map<String, Map<String, int>> batchData = {};
+        for (var doc in filteredRecords) {
+          final data = doc.data() as Map<String, dynamic>?;
+          if (data == null) continue;
+
+          final batchIdKey = data['batchId'] as String? ?? 'Unknown';
+
+          if (!batchData.containsKey(batchIdKey)) {
+            batchData[batchIdKey] = {
+              'present': 0,
+              'absent': 0,
+              'total': 0,
+            };
+          }
+
+          batchData[batchIdKey]!['total'] =
+              batchData[batchIdKey]!['total']! + 1;
+          if (data['isPresent'] == true) {
+            batchData[batchIdKey]!['present'] =
+                batchData[batchIdKey]!['present']! + 1;
+          } else {
+            batchData[batchIdKey]!['absent'] =
+                batchData[batchIdKey]!['absent']! + 1;
+          }
+        }
+
+        // Get batch names
+        final batchesSnapshot = await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('batches')
+            .get();
+
+        Map<String, String> batchNames = {};
+        for (var doc in batchesSnapshot.docs) {
+          final data = doc.data();
+          batchNames[doc.id] = data['batchName'] ?? data['title'] ?? 'Unknown';
+        }
+
+        batchData.forEach((batchId, counts) {
+          double percentage = counts['total']! > 0
+              ? (counts['present']! / counts['total']!) * 100
+              : 0.0;
+          batchStats.add({
+            'batchId': batchId,
+            'batchName': batchNames[batchId] ?? 'Unknown Batch',
+            'percentage': percentage.roundToDouble(),
+            'present': counts['present'],
+            'absent': counts['absent'],
+            'total': counts['total'],
+          });
+        });
+
+        // Sort by batch name
+        batchStats.sort((a, b) => a['batchName'].compareTo(b['batchName']));
+      }
+
+      // Calculate average, highest, and lowest attendance
+      double averageAttendance =
+          totalRecords > 0 ? (presentCount / totalRecords) * 100 : 0.0;
+
+      Map<String, dynamic>? highestWeek;
+      Map<String, dynamic>? lowestWeek;
+      if (weeklyTrends.isNotEmpty) {
+        highestWeek = weeklyTrends
+            .reduce((a, b) => a['percentage'] > b['percentage'] ? a : b);
+        lowestWeek = weeklyTrends
+            .reduce((a, b) => a['percentage'] < b['percentage'] ? a : b);
+      }
+
+      return {
+        'overallStats': {
+          'totalRecords': totalRecords,
+          'presentCount': presentCount,
+          'absentCount': absentCount,
+          'presentPercentage': totalRecords > 0
+              ? ((presentCount / totalRecords) * 100).roundToDouble()
+              : 0.0,
+          'absentPercentage': totalRecords > 0
+              ? ((absentCount / totalRecords) * 100).roundToDouble()
+              : 0.0,
+        },
+        'weeklyTrends': weeklyTrends,
+        'batchStats': batchStats,
+        'statistics': {
+          'averageAttendance': averageAttendance.roundToDouble(),
+          'highestWeek': highestWeek,
+          'lowestWeek': lowestWeek,
+        },
+      };
+    } catch (e) {
+      print('Error getting attendance trends data: $e');
+      rethrow;
+    }
+  }
+
+  /// Get list of batches for the professor (for dropdown filter)
+  Future<List<Map<String, String>>> getProfessorBatches() async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('batches')
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          'name':
+              (data['batchName'] ?? data['title'] ?? 'Unknown Batch') as String,
+        };
+      }).toList();
+    } catch (e) {
+      print('Error getting professor batches: $e');
+      return [];
+    }
+  }
 }
