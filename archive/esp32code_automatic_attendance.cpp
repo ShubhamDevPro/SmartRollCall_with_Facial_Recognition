@@ -918,7 +918,7 @@ bool markAttendance(String studentId, ClassSchedule* schedule, String macAddress
       Serial.println("  [!] Authentication failed - check API key");
     }
   }
-  
+
   http.end();
   return success;
 }

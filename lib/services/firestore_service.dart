@@ -740,7 +740,7 @@ class FirestoreService {
           .doc(batchId)
           .get();
 
-      final courseName = batchDoc.data()?['batchName'] ?? 'Unknown Course';
+      final courseName = batchDoc.data()?['title'] ?? 'Unknown Course';
 
       // Get professor information
       final professorDoc =
@@ -1073,7 +1073,7 @@ class FirestoreService {
         Map<String, String> batchNames = {};
         for (var doc in batchesSnapshot.docs) {
           final data = doc.data();
-          batchNames[doc.id] = data['batchName'] ?? data['title'] ?? 'Unknown';
+          batchNames[doc.id] = data['title'] ?? data['batchName'] ?? 'Unknown';
         }
 
         batchData.forEach((batchId, counts) {
@@ -1147,7 +1147,7 @@ class FirestoreService {
         return {
           'id': doc.id,
           'name':
-              (data['batchName'] ?? data['title'] ?? 'Unknown Batch') as String,
+              (data['title'] ?? data['batchName'] ?? 'Unknown Batch') as String,
         };
       }).toList();
     } catch (e) {
