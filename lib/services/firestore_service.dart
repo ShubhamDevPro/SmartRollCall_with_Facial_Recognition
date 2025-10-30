@@ -1155,4 +1155,41 @@ class FirestoreService {
       return [];
     }
   }
+
+  /// Check if attendance has already been marked for a specific schedule and date
+  Future<bool> isAttendanceAlreadyMarked(
+    String batchId,
+    String scheduleId,
+    DateTime date,
+  ) async {
+    try {
+      // Query attendance records for this batch and schedule
+      final snapshot = await _firestore
+          .collection('attendance_records')
+          .where('batchId', isEqualTo: batchId)
+          .where('scheduleId', isEqualTo: scheduleId)
+          .get();
+
+      // Filter by date in memory to avoid composite index
+      final dateStart = DateTime(date.year, date.month, date.day);
+      final dateEnd = DateTime(date.year, date.month, date.day, 23, 59, 59);
+
+      final matchingRecords = snapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data == null) return false;
+
+        final recordDate = (data['date'] as Timestamp?)?.toDate();
+        if (recordDate == null) return false;
+
+        return recordDate
+                .isAfter(dateStart.subtract(const Duration(seconds: 1))) &&
+            recordDate.isBefore(dateEnd.add(const Duration(seconds: 1)));
+      }).toList();
+
+      return matchingRecords.isNotEmpty;
+    } catch (e) {
+      print('Error checking if attendance already marked: $e');
+      return false;
+    }
+  }
 }

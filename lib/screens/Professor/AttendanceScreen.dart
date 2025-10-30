@@ -136,6 +136,44 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final navigator = Navigator.of(context);
 
     try {
+      // Check if attendance has already been marked for this schedule and date
+      final isAlreadyMarked = await _firestoreService.isAttendanceAlreadyMarked(
+        widget.batchId,
+        selectedSchedule!.id,
+        selectedDate,
+      );
+
+      if (isAlreadyMarked) {
+        // Check if widget is still mounted before showing SnackBar
+        if (!mounted) return;
+
+        // Show warning message that attendance is already marked
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Attendance has already been marked for ${selectedSchedule!.displayString} on ${_getCurrentDate()}',
+            ),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'View History',
+              textColor: Colors.white,
+              onPressed: () {
+                navigator.pushReplacement(
+                  MaterialPageRoute(
+                    builder: (context) => AttendanceHistoryScreen(
+                      batchId: widget.batchId,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+        return;
+      }
+
       // Prepare attendance data for storage
       final attendanceData = students
           .map((student) => {
