@@ -17,7 +17,8 @@ class AttendanceHistoryScreen extends StatefulWidget {
   const AttendanceHistoryScreen({super.key, this.batchId});
 
   @override
-  _AttendanceHistoryScreenState createState() => _AttendanceHistoryScreenState();
+  _AttendanceHistoryScreenState createState() =>
+      _AttendanceHistoryScreenState();
 }
 
 class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
@@ -32,6 +33,8 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   List<Map<String, dynamic>> attendanceData = [];
   // List to store filtered attendance records based on search
   List<Map<String, dynamic>> filteredAttendanceData = [];
+  // NEW: Grouped attendance data by schedule
+  Map<String, List<Map<String, dynamic>>> groupedAttendanceData = {};
   // Loading state flag
   bool isLoading = false;
   // NEW: Cache for schedule information
@@ -58,6 +61,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       if (query.isEmpty) {
         // If search is empty, show all records
         filteredAttendanceData = attendanceData;
+        _groupAttendanceBySchedule();
       } else {
         // Filter based on name or enrollment number
         filteredAttendanceData = attendanceData.where((student) {
@@ -67,8 +71,23 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
           return nameLower.contains(searchLower) ||
               enrollLower.contains(searchLower);
         }).toList();
+        _groupAttendanceBySchedule();
       }
     });
+  }
+
+  /// Groups attendance data by schedule ID for better organization
+  void _groupAttendanceBySchedule() {
+    groupedAttendanceData.clear();
+
+    for (var record in filteredAttendanceData) {
+      final scheduleId = record['scheduleId'] as String? ?? 'unknown';
+
+      if (!groupedAttendanceData.containsKey(scheduleId)) {
+        groupedAttendanceData[scheduleId] = [];
+      }
+      groupedAttendanceData[scheduleId]!.add(record);
+    }
   }
 
   /// Fetches attendance data from Firestore for the selected date
@@ -76,7 +95,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     try {
       // Check if widget is still mounted before calling setState
       if (!mounted) return;
-      
+
       setState(() {
         isLoading = true;
       });
@@ -89,18 +108,19 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
 
       // NEW: Load schedule information for display
       if (widget.batchId != null) {
-        final schedules = await _firestoreService.getCourseSchedulesList(widget.batchId!);
-        scheduleCache = Map.fromEntries(
-          schedules.map((schedule) => MapEntry(schedule.id, schedule.displayString))
-        );
+        final schedules =
+            await _firestoreService.getCourseSchedulesList(widget.batchId!);
+        scheduleCache = Map.fromEntries(schedules
+            .map((schedule) => MapEntry(schedule.id, schedule.displayString)));
       }
 
       setState(() {
         attendanceData = data;
         filteredAttendanceData = data;
+        _groupAttendanceBySchedule();
       });
 
-      if (!mounted) return;  // Check again before final setState
+      if (!mounted) return; // Check again before final setState
       setState(() {
         isLoading = false;
       });
@@ -125,7 +145,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       // Toggle the attendance status
       final newStatus = !student['isPresent'];
       final attendanceRecordId = student['attendanceRecordId'] as String?;
-      
+
       if (attendanceRecordId != null) {
         // NEW: Use new method that updates attendance_records collection
         await _firestoreService.updateAttendanceRecord(
@@ -141,7 +161,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
           newStatus,
         );
       }
-      
+
       // Reload data to reflect changes
       await _loadAttendanceData();
 
@@ -172,7 +192,8 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   Future<void> _exportAttendanceData() async {
     setState(() => isLoading = true);
     try {
-      final data = await _firestoreService.getAttendanceHistory(widget.batchId!);
+      final data =
+          await _firestoreService.getAttendanceHistory(widget.batchId!);
       await ExcelExportUtil.exportAttendanceData(
         data: data,
         selectedDate: selectedDate,
@@ -195,6 +216,143 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     } finally {
       setState(() => isLoading = false);
     }
+  }
+
+  /// Builds a simple list view when there's only one schedule for the day
+  Widget _buildSingleScheduleView() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: filteredAttendanceData.length,
+      itemBuilder: (context, index) {
+        final student = filteredAttendanceData[index];
+        final scheduleId = student['scheduleId'] as String?;
+        final scheduleInfo =
+            scheduleId != null ? scheduleCache[scheduleId] : null;
+
+        return AttendanceHistoryCard(
+          name: student['name'],
+          enrollNumber: student['enrollNumber'],
+          isPresent: student['isPresent'],
+          onStatusChanged: () => _updateAttendanceStatus(student),
+          totalDays: student['totalDays'] ?? 0,
+          presentDays: student['presentDays'] ?? 0,
+          scheduleInfo: scheduleInfo,
+        );
+      },
+    );
+  }
+
+  /// Builds an organized view when there are multiple schedules for the day
+  Widget _buildMultipleScheduleView() {
+    // Sort schedules by start time
+    final sortedScheduleIds = groupedAttendanceData.keys.toList()
+      ..sort((a, b) {
+        final scheduleA = scheduleCache[a] ?? '';
+        final scheduleB = scheduleCache[b] ?? '';
+        return scheduleA.compareTo(scheduleB);
+      });
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: sortedScheduleIds.length,
+      itemBuilder: (context, scheduleIndex) {
+        final scheduleId = sortedScheduleIds[scheduleIndex];
+        final scheduleRecords = groupedAttendanceData[scheduleId] ?? [];
+        final scheduleInfo = scheduleCache[scheduleId] ?? 'Unknown Schedule';
+
+        // Calculate statistics for this schedule
+        final present =
+            scheduleRecords.where((r) => r['isPresent'] == true).length;
+        final total = scheduleRecords.length;
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          elevation: 4,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Schedule header
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withOpacity(0.1),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(12),
+                    topRight: Radius.circular(12),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.schedule,
+                      color: Theme.of(context).primaryColor,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        scheduleInfo,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.green.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Text(
+                        '$present/$total Present',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.green,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Student list for this schedule
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(8),
+                itemCount: scheduleRecords.length,
+                itemBuilder: (context, studentIndex) {
+                  final student = scheduleRecords[studentIndex];
+
+                  return AttendanceHistoryCard(
+                    name: student['name'],
+                    enrollNumber: student['enrollNumber'],
+                    isPresent: student['isPresent'],
+                    onStatusChanged: () => _updateAttendanceStatus(student),
+                    totalDays: student['totalDays'] ?? 0,
+                    presentDays: student['presentDays'] ?? 0,
+                    scheduleInfo:
+                        null, // Don't show schedule info in card since it's in header
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -372,29 +530,9 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                           style: TextStyle(color: Colors.grey[600]),
                         ),
                       )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: filteredAttendanceData.length,
-                        itemBuilder: (context, index) {
-                          final student = filteredAttendanceData[index];
-                          // NEW: Get schedule information for display
-                          final scheduleId = student['scheduleId'] as String?;
-                          final scheduleInfo = scheduleId != null 
-                              ? scheduleCache[scheduleId] 
-                              : null;
-                          
-                          return AttendanceHistoryCard(
-                            name: student['name'],
-                            enrollNumber: student['enrollNumber'],
-                            isPresent: student['isPresent'],
-                            onStatusChanged: () =>
-                                _updateAttendanceStatus(student),
-                            totalDays: student['totalDays'] ?? 0,
-                            presentDays: student['presentDays'] ?? 0,
-                            scheduleInfo: scheduleInfo, // NEW: Pass schedule info
-                          );
-                        },
-                      ),
+                    : groupedAttendanceData.length == 1
+                        ? _buildSingleScheduleView()
+                        : _buildMultipleScheduleView(),
           ),
         ],
       ),
