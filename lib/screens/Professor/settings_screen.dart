@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/session_service.dart';
 import '../../auth/auth_page.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -68,8 +70,15 @@ class SettingsScreen extends StatelessWidget {
                         child: const Text('Cancel'),
                       ),
                       TextButton(
-                        onPressed: () {
+                        onPressed: () async {
                           Navigator.pop(context); // Close dialog
+
+                          // Clear session and sign out
+                          final sessionService = SessionService();
+                          await sessionService.clearSession();
+                          await FirebaseAuth.instance.signOut();
+
+                          if (!context.mounted) return;
                           Navigator.pushAndRemoveUntil(
                             context,
                             MaterialPageRoute(

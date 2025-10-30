@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
+import '../services/session_service.dart';
 import '../services/student_profile_service.dart';
 import 'auth_success_animation.dart';
 import '../screens/Student/enrollment_setup_screen.dart';
@@ -19,6 +20,7 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final SessionService _sessionService = SessionService();
   bool isProfessorLogin = true; // Track selected role
 
   @override
@@ -238,8 +240,6 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             SizedBox(height: 12),
 
-                            
-
                             // Login button
                             SizedBox(
                               width: double.infinity,
@@ -268,6 +268,12 @@ class _LoginPageState extends State<LoginPage> {
                                       if (mounted) Navigator.pop(context);
 
                                       if (success) {
+                                        // Save session for professor
+                                        await _sessionService.saveSession(
+                                          email: _emailController.text.trim(),
+                                          role: 'professor',
+                                        );
+
                                         if (mounted) {
                                           Navigator.pushReplacement(
                                             context,

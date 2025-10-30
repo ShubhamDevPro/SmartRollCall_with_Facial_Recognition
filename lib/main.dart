@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'auth/auth_page.dart';
 import 'firebase_options.dart'; // Import the generated file
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  //const int defaultBufferSize = 1000;
+
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
   };
@@ -14,6 +15,9 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+
+    // Configure Firebase Auth persistence for Android
+    await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
   } catch (e) {
     debugPrint('Firebase initialization error: $e');
     // Handle initialization error gracefully
@@ -24,6 +28,7 @@ void main() async {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -42,7 +47,7 @@ class MyApp extends StatelessWidget {
           foregroundColor: Colors.white,
         ),
       ),
-      home: AuthPage(),
+      home: const AuthPage(),
     );
   }
 }
