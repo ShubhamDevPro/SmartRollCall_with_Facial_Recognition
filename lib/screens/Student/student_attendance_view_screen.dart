@@ -145,7 +145,7 @@ class _StudentAttendanceViewScreenState
         return;
       }
 
-      // Process the records
+      // Process the records - group by course
       final Map<String, Map<String, dynamic>> courseStatsTemp = {};
 
       for (var record in attendanceRecords) {
@@ -157,6 +157,7 @@ class _StudentAttendanceViewScreenState
             'present': 0,
             'professorName': record['professorName'],
             'courseName': record['courseName'],
+            'records': <Map<String, dynamic>>[], // Store individual records
           };
         }
 
@@ -167,6 +168,17 @@ class _StudentAttendanceViewScreenState
           courseStatsTemp[courseKey]!['present'] =
               (courseStatsTemp[courseKey]!['present'] as int) + 1;
         }
+
+        // Add record to this course's records list
+        (courseStatsTemp[courseKey]!['records'] as List<Map<String, dynamic>>)
+            .add(record);
+      }
+
+      // Sort records within each course by date (most recent first)
+      for (var courseData in courseStatsTemp.values) {
+        (courseData['records'] as List<Map<String, dynamic>>).sort(
+          (a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime),
+        );
       }
 
       // Sort by date (already sorted from service, but just in case)
@@ -513,49 +525,170 @@ class _StudentAttendanceViewScreenState
                         const SizedBox(height: 20),
                       ],
 
-                      // Attendance History
+                      // Attendance History - Grouped by Course
                       const Text(
-                        'Attendance History',
+                        'Attendance History (Grouped by Course)',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 10),
-                      ..._attendanceRecords.map((record) {
-                        final date = record['date'] as DateTime;
-                        final isPresent = record['isPresent'] as bool;
+                      ..._courseStats.entries.map((entry) {
+                        final stats = entry.value;
                         final courseName =
-                            record['courseName'] ?? 'Unknown Course';
+                            stats['courseName'] ?? 'Unknown Course';
                         final professorName =
-                            record['professorName'] ?? 'Unknown Professor';
+                            stats['professorName'] ?? 'Unknown Professor';
+                        final records =
+                            stats['records'] as List<Map<String, dynamic>>;
+                        final total = stats['total'] as int;
+                        final present = stats['present'] as int;
+                        final percentage =
+                            total > 0 ? (present / total) * 100 : 0.0;
 
                         return Card(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor:
-                                  isPresent ? Colors.green : Colors.red,
-                              child: Icon(
-                                isPresent ? Icons.check : Icons.close,
-                                color: Colors.white,
-                              ),
+                          margin: const EdgeInsets.only(bottom: 15),
+                          elevation: 3,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Theme(
+                            data: Theme.of(context).copyWith(
+                              dividerColor: Colors.transparent,
                             ),
-                            title: Text(
-                              courseName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
+                            child: ExpansionTile(
+                              tilePadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
                               ),
-                            ),
-                            subtitle: Text(
-                              'Prof. $professorName\n${DateFormat('MMM dd, yyyy - hh:mm a').format(date)}',
-                            ),
-                            trailing: Text(
-                              isPresent ? 'Present' : 'Absent',
-                              style: TextStyle(
-                                color: isPresent ? Colors.green : Colors.red,
-                                fontWeight: FontWeight.w600,
+                              leading: CircleAvatar(
+                                backgroundColor: percentage >= 75
+                                    ? Colors.green.shade100
+                                    : percentage >= 65
+                                        ? Colors.orange.shade100
+                                        : Colors.red.shade100,
+                                child: Icon(
+                                  Icons.school,
+                                  color: percentage >= 75
+                                      ? Colors.green
+                                      : percentage >= 65
+                                          ? Colors.orange
+                                          : Colors.red,
+                                ),
                               ),
+                              title: Text(
+                                courseName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              subtitle: Text(
+                                'Prof. $professorName • $present/$total Present',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                              trailing: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: percentage >= 75
+                                      ? Colors.green
+                                      : percentage >= 65
+                                          ? Colors.orange
+                                          : Colors.red,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  '${percentage.toStringAsFixed(0)}%',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              children: [
+                                const Divider(height: 1),
+                                ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  padding: const EdgeInsets.all(12),
+                                  itemCount: records.length,
+                                  separatorBuilder: (context, index) =>
+                                      const Divider(height: 1),
+                                  itemBuilder: (context, index) {
+                                    final record = records[index];
+                                    final date = record['date'] as DateTime;
+                                    final isPresent =
+                                        record['isPresent'] as bool;
+
+                                    return ListTile(
+                                      dense: true,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 4,
+                                      ),
+                                      leading: Icon(
+                                        isPresent
+                                            ? Icons.check_circle
+                                            : Icons.cancel,
+                                        color: isPresent
+                                            ? Colors.green
+                                            : Colors.red,
+                                        size: 28,
+                                      ),
+                                      title: Text(
+                                        DateFormat('EEEE, MMM dd, yyyy')
+                                            .format(date),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        DateFormat('hh:mm a').format(date),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                      trailing: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isPresent
+                                              ? Colors.green.shade50
+                                              : Colors.red.shade50,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: isPresent
+                                                ? Colors.green
+                                                : Colors.red,
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          isPresent ? 'Present' : 'Absent',
+                                          style: TextStyle(
+                                            color: isPresent
+                                                ? Colors.green
+                                                : Colors.red,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
                             ),
                           ),
                         );
