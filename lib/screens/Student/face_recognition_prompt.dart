@@ -60,7 +60,7 @@ class FaceVerificationPrompt extends StatefulWidget {
 
 class _FaceVerificationPromptState extends State<FaceVerificationPrompt> {
   bool _isVerifying = false;
-  int _timeRemaining = 300; // 5 minutes in seconds
+  int _timeRemaining = 5; // 5 minutes
   Timer? _countdownTimer;
   final FaceEnrollmentService _faceService = FaceEnrollmentService();
 
@@ -330,19 +330,103 @@ class _FaceVerificationPromptState extends State<FaceVerificationPrompt> {
             _isVerifying = false;
           });
 
-          String message = 'Face verification failed. ';
+          String detailedReason = '';
           if (similarity < similarityThreshold) {
-            message += 'Face does not match. ';
+            detailedReason = 'The face does not match your enrolled profile.';
           }
           if (liveness < livenessThreshold) {
-            message += 'Please use a live camera feed. ';
+            detailedReason += (detailedReason.isEmpty ? '' : ' ') + 'Please use a live camera feed (photos not allowed).';
           }
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 4),
+          // Show stern warning dialog
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.red, size: 32),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Verification Failed',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    detailedReason,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red, size: 20),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '⚠️ Warning: Attempting to verify with someone else\'s face is a serious violation. This incident will be reported to the authorities and may result in disciplinary action.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.red,
+                              fontWeight: FontWeight.w500,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Please try again with your own face or contact your professor.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.grey[700],
+                  ),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    // Allow user to try again
+                    _verifyAndMarkAttendance();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Try Again'),
+                ),
+              ],
             ),
           );
         }

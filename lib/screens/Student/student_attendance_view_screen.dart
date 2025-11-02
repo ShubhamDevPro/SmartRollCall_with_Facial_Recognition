@@ -649,13 +649,6 @@ class _StudentAttendanceViewScreenState
                                           fontSize: 14,
                                         ),
                                       ),
-                                      subtitle: Text(
-                                        DateFormat('hh:mm a').format(date),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey.shade600,
-                                        ),
-                                      ),
                                       trailing: Container(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 10,
