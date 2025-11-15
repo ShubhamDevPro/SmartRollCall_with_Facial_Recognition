@@ -1192,4 +1192,49 @@ class FirestoreService {
       return false;
     }
   }
+
+  /// Get the number of students in a batch
+  Future<int> getStudentCount(String batchId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('batches')
+          .doc(batchId)
+          .collection('students')
+          .get();
+      return snapshot.docs.length;
+    } catch (e) {
+      print('Error getting student count: $e');
+      return 0;
+    }
+  }
+
+  /// Get the number of unique session dates for a batch
+  /// Each unique date in attendance_records counts as one session
+  Future<int> getSessionCount(String batchId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('attendance_records')
+          .where('batchId', isEqualTo: batchId)
+          .get();
+
+      // Get unique dates from attendance records
+      final uniqueDates = <String>{};
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final date = (data['date'] as Timestamp?)?.toDate();
+        if (date != null) {
+          // Create date string in YYYY-MM-DD format
+          final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+          uniqueDates.add(dateStr);
+        }
+      }
+
+      return uniqueDates.length;
+    } catch (e) {
+      print('Error getting session count: $e');
+      return 0;
+    }
+  }
 }

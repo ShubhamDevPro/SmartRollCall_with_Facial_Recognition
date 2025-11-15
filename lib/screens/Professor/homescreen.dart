@@ -101,6 +101,10 @@ class _MyHomePageState extends State<MyHomePage> {
               }
             }
 
+            // Get student count and session count for this course
+            final studentCount = await _firestoreService.getStudentCount(doc.id);
+            final sessionCount = await _firestoreService.getSessionCount(doc.id);
+
             loadedCourses.add({
               'icon': IconData(data['icon'] ?? Icons.book.codePoint,
                   fontFamily: 'MaterialIcons'),
@@ -113,6 +117,8 @@ class _MyHomePageState extends State<MyHomePage> {
               'startTime': startTime,
               'endTime': endTime,
               'createdAt': data['createdAt'],
+              'studentCount': studentCount,
+              'sessionCount': sessionCount,
             });
           }
 
@@ -286,10 +292,7 @@ class _MyHomePageState extends State<MyHomePage> {
                             final course = courses[index];
                             return _buildCourseCard(
                               context: context,
-                              icon: course['icon'],
-                              title: course['title'],
-                              batchName: course['batchName'],
-                              batchYear: course['batchYear'],
+                              course: course,
                               index: index,
                             );
                           },
@@ -349,12 +352,13 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Widget _buildCourseCard({
     required BuildContext context,
-    required IconData icon,
-    required String title,
-    required String batchName,
-    required String batchYear,
+    required Map<String, dynamic> course,
     required int index,
   }) {
+    final icon = course['icon'] as IconData;
+    final title = course['title'] as String;
+    final batchName = course['batchName'] as String;
+    final batchYear = course['batchYear'] as String;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -421,12 +425,12 @@ class _MyHomePageState extends State<MyHomePage> {
                           children: [
                             _buildStatsChip(
                               Icons.person_outline,
-                              '32 Students',
+                              '${course['studentCount'] ?? 0} Students',
                             ),
                             const SizedBox(width: 12),
                             _buildStatsChip(
                               Icons.calendar_today_outlined,
-                              '12 Sessions',
+                              '${course['sessionCount'] ?? 0} Sessions',
                             ),
                           ],
                         ),
